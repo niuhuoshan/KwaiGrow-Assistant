@@ -1,0 +1,79 @@
+# Kuaishou Growth Assistant - Example Config
+# Copy this file to your local runtime config, e.g.:
+# cp config/kuaishou.yaml.example config.realrun.local.yaml
+
+platform: kuaishou
+account_id: default
+
+openai:
+  # Example: https://api.openai.com/v1 or your OpenAI-compatible gateway
+  base_url: https://api.openai.com/v1
+  api_key: sk-your-api-key-here
+  model_id: gpt-4o-mini
+  temperature: 0.6
+  max_tokens: 400
+  timeout_seconds: 30
+
+browser:
+  # If you connect to an existing Chrome profile via CDP:
+  ws_url: ws://127.0.0.1:18792/cdp
+  headless: false
+  executable_path: null
+  user_data_dir: ./data/browser
+  navigation_timeout_ms: 45000
+  action_timeout_ms: 20000
+  post_load_wait_ms: 1200
+  # false = search once per keyword then process multiple posts
+  # true  = search before every post
+  search_each_post: false
+
+selectors:
+  kuaishou_selector_file: ./config/selectors/kuaishou.yaml
+
+ai:
+  enabled: true
+  keyword_max_count: 6
+  comment_candidate_count: 3
+  strict_comment_gate: false
+
+topics:
+  direction_keywords:
+    - interview tips
+    - career growth
+
+comment_rules:
+  requirements:
+    - Encourage the author naturally and ask one concrete follow-up.
+    - Keep tone friendly and concise.
+  banned_words:
+    - contact me
+    - DM me
+    - add wechat
+  min_length: 8
+  max_length: 80
+
+runtime:
+  max_comments_per_round: 8
+  daily_comment_limit: 40
+  search_limit_per_keyword: 10
+  single_keyword_search: true
+  comment_every_post: true
+  sort_by: latest
+  time_range: week
+  action_wait_seconds:
+    min_seconds: 0.6
+    max_seconds: 1.6
+  round_wait_seconds:
+    min_seconds: 20
+    max_seconds: 45
+
+dedup:
+  sqlite_path: ./data/dedup.sqlite3
+  by_post_id: true
+  by_url: true
+  by_title_hash: true
+  avoid_repeated_comment_text: true
+
+logging:
+  level: INFO
+  file_path: ./logs/app.log

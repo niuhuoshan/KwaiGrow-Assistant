@@ -1,0 +1,71 @@
+platform: "kuaishou"
+account_id: "default"
+
+openai:
+  base_url: "https://api.openai.com/v1"
+  api_key: "${OPENAI_API_KEY}"
+  model_id: "gpt-4o-mini"
+  temperature: 0.7
+  max_tokens: 500
+  timeout_seconds: 45
+
+browser:
+  ws_url: "ws://127.0.0.1:18792/cdp"
+  headless: true
+  search_each_post: false
+  executable_path: null
+  user_data_dir: "./data/browser"
+  navigation_timeout_ms: 45000
+  action_timeout_ms: 18000
+  post_load_wait_ms: 1200
+
+selectors:
+  kuaishou_selector_file: "./config/selectors/kuaishou.yaml"
+
+ai:
+  enabled: true
+  keyword_max_count: 10
+  comment_candidate_count: 3
+  strict_comment_gate: false
+
+topics:
+  direction_keywords:
+    - "美女"
+    - "AI技术"
+
+comment_rules:
+  requirements:
+    - "必须先认可对方观点，再补一句虚心求教"
+    - "语气自然，不营销，不要夸张"
+  banned_words:
+    - "加V"
+    - "私信"
+    - "合作"
+  min_length: 6
+  max_length: 60
+
+runtime:
+  max_comments_per_round: 5
+  single_keyword_search: true
+  comment_every_post: true
+  daily_comment_limit: 30
+  search_limit_per_keyword: 10
+  sort_by: "latest"
+  time_range: "week"
+  action_wait_seconds:
+    min_seconds: 1
+    max_seconds: 3
+  round_wait_seconds:
+    min_seconds: 20
+    max_seconds: 45
+
+dedup:
+  sqlite_path: "./data/dedup.sqlite3"
+  by_post_id: true
+  by_url: true
+  by_title_hash: true
+  avoid_repeated_comment_text: true
+
+logging:
+  level: "INFO"
+  file_path: "./logs/app.log"

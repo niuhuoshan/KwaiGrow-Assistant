@@ -1,0 +1,32 @@
+# Python artifacts
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.pytest_cache/
+.mypy_cache/
+
+# Virtualenv
+.venv/
+
+# Runtime data
+logs/
+data/
+*.sqlite3
+
+# Local IDE/system
+.DS_Store
+.vscode/
+.idea/
+
+# Local runtime configs (keep only examples)
+config.realrun*.yaml
+config.verify.yaml
+config.submitcheck.yaml
+config.regress.submit.yaml
+config.e2e.yaml
+config.yaml
+
+# Secrets
+.env
+*.env

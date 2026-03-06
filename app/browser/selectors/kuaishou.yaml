@@ -1,0 +1,18 @@
+platform: "kuaishou"
+selectors:
+  login_button: "button:has-text('登录')"
+  search_input: "input[placeholder='搜索你感兴趣的内容'], header .search-container input[placeholder*='搜索']"
+  search_submit: "button:has-text('搜索'), header .search-container button"
+
+  tab_video: "button:has-text('视频'), span.tab-item:has-text('视频')"
+  tab_user: "button:has-text('用户'), span.tab-item:has-text('用户')"
+  sort_latest: "button:has-text('最新'), span:has-text('最新')"
+  filter_button: "button:has-text('筛选'), span:has-text('筛选')"
+
+  result_card: "main div:has(img):has-text('#'), main div:has(img)"
+  post_link: "a[href*='/short-video/'], a[href*='/video/'], a[href*='photoId=']"
+
+  comment_button: ".hover-tip.commentPanel, button:has-text('评论'), div:has-text('评论')"
+  comment_panel: ".side-area, .tab-nav-wrapper"
+  comment_input: "textarea, div[contenteditable='true'], input[placeholder*='说点什么']"
+  comment_submit: "button:has-text('发布'), button:has-text('发送'), .send-btn:not(.disabled), .send-btn"
