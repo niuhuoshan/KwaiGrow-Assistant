@@ -65,6 +65,7 @@ class RuntimeConfig(BaseModel):
     daily_comment_limit: int = 30
     search_limit_per_keyword: int = 10
     single_keyword_search: bool = True
+    disable_keyword_expansion: bool = False
     comment_every_post: bool = True
     sort_by: str = "latest"
     time_range: str = "week"

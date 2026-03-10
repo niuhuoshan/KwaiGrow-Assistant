@@ -6,7 +6,9 @@ import json
 import logging
 import os
 import re
+import socket
 import time
+from time import perf_counter
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 from urllib.parse import quote, unquote, urlparse, urlunparse, parse_qsl, urlencode, urljoin
@@ -32,29 +34,66 @@ class KuaishouClient:
 
     def start(self) -> None:
         if self._context:
+            self._logger.info("[BROWSER] start skipped: context already initialized")
             return
 
-        self._playwright = sync_playwright().start()
+        start_ts = perf_counter()
+        self._logger.info(
+            "[BROWSER] start begin | mode=%s | headless=%s | ws_url=%s | user_data_dir=%s | action_timeout_ms=%s",
+            "cdp" if self._cfg.ws_url else "persistent",
+            self._cfg.headless,
+            self._mask_url_for_log(self._cfg.ws_url) if self._cfg.ws_url else "",
+            self._cfg.user_data_dir,
+            self._cfg.action_timeout_ms,
+        )
+
+        try:
+            self._logger.info("[BROWSER] init playwright runtime")
+            self._playwright = sync_playwright().start()
+            self._logger.info("[BROWSER] playwright runtime ready")
+        except PermissionError as exc:
+            raise RuntimeError(
+                "Playwright 启动被系统拒绝访问（WinError 5）。请以管理员权限运行，"
+                "并检查安全软件是否拦截 python/node 子进程。"
+            ) from exc
+        except Exception as exc:
+            raise RuntimeError(f"Playwright runtime start failed: {exc}") from exc
 
         if self._cfg.ws_url:
             cdp_url = self._inject_relay_token(self._cfg.ws_url)
+            parsed_cdp = urlparse(cdp_url)
+            cdp_host = parsed_cdp.hostname or ""
+            cdp_port = parsed_cdp.port or (443 if parsed_cdp.scheme == "wss" else 80)
+            tcp_ready = self._check_tcp_port(cdp_host, cdp_port, timeout_seconds=1.5)
+            self._logger.info(
+                "[BROWSER] CDP precheck | host=%s | port=%s | tcp_reachable=%s",
+                cdp_host,
+                cdp_port,
+                tcp_ready,
+            )
+            self._logger.info("[BROWSER] connect CDP relay | url=%s", self._mask_url_for_log(cdp_url))
             try:
                 self._cdp_browser = self._playwright.chromium.connect_over_cdp(
                     cdp_url,
                     timeout=self._cfg.action_timeout_ms,
                 )
+                self._logger.info("[BROWSER] CDP connected")
             except Exception as exc:
                 raise RuntimeError(
                     "CDP relay 未连接。请先在本机 Chrome 打开目标标签页并点击 OpenClaw Browser Relay 扩展图标使其 ON。"
                 ) from exc
             contexts = self._cdp_browser.contexts
+            self._logger.info("[BROWSER] CDP contexts=%s", len(contexts))
             if not contexts:
                 self._context = self._cdp_browser.new_context()
+                self._logger.info("[BROWSER] create new CDP context")
             else:
                 self._context = contexts[0]
+                self._logger.info("[BROWSER] reuse existing CDP context")
         else:
             user_data_dir = Path(self._cfg.user_data_dir)
             user_data_dir.mkdir(parents=True, exist_ok=True)
+            self._logger.info("[BROWSER] launch persistent context | dir=%s", user_data_dir)
 
             launch_kwargs = {
                 "headless": self._cfg.headless,
@@ -64,16 +103,21 @@ class KuaishouClient:
             if self._cfg.executable_path:
                 launch_kwargs["executable_path"] = self._cfg.executable_path
 
-            self._context = self._playwright.chromium.launch_persistent_context(
-                user_data_dir=str(user_data_dir),
-                **launch_kwargs,
-            )
+            try:
+                self._context = self._playwright.chromium.launch_persistent_context(
+                    user_data_dir=str(user_data_dir),
+                    **launch_kwargs,
+                )
+            except Exception as exc:
+                raise RuntimeError(f"persistent browser launch failed: {exc}") from exc
 
         page = self._context.pages[0] if self._context.pages else self._context.new_page()
         page.set_default_timeout(self._cfg.action_timeout_ms)
         page.set_default_navigation_timeout(self._cfg.navigation_timeout_ms)
 
         self._page = page
+        elapsed = perf_counter() - start_ts
+        self._logger.info("[BROWSER] start success | page_ready=true | elapsed=%.2fs", elapsed)
 
     def close(self) -> None:
         if self._context:
@@ -881,6 +925,29 @@ class KuaishouClient:
         query["token"] = relay_token
         patched_query = urlencode(query)
         return urlunparse(parsed._replace(query=patched_query))
+
+    @staticmethod
+    def _mask_url_for_log(url: Optional[str]) -> str:
+        if not url:
+            return ""
+        try:
+            parsed = urlparse(url)
+            query = dict(parse_qsl(parsed.query))
+            if "token" in query and query["token"]:
+                query["token"] = "***"
+            return urlunparse(parsed._replace(query=urlencode(query)))
+        except Exception:
+            return str(url)
+
+    @staticmethod
+    def _check_tcp_port(host: str, port: int, timeout_seconds: float = 1.5) -> bool:
+        if not host or not port:
+            return False
+        try:
+            with socket.create_connection((host, port), timeout=timeout_seconds):
+                return True
+        except Exception:
+            return False
 
     @staticmethod
     def _resolve_gateway_token() -> str:

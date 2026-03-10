@@ -47,6 +47,7 @@ comment_rules:
 runtime:
   max_comments_per_round: 5
   single_keyword_search: true
+  disable_keyword_expansion: false
   comment_every_post: true
   daily_comment_limit: 30
   search_limit_per_keyword: 10

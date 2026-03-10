@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 import random
 import time
+from time import perf_counter
 from typing import List, Set
 
 from .ai.comment_engine import CommentEngine
@@ -23,8 +24,16 @@ class AutoCommenterOrchestrator:
             raise ValueError("this project currently supports platform=kuaishou only")
 
         self._ai_client = OpenAIChatClient(cfg.openai, enabled=cfg.ai.enabled)
-        self._keyword_expander = KeywordExpander(self._ai_client, max_count=cfg.ai.keyword_max_count)
-        self._comment_engine = CommentEngine(self._ai_client, candidate_count=cfg.ai.comment_candidate_count)
+        self._keyword_expander = KeywordExpander(
+            self._ai_client,
+            max_count=cfg.ai.keyword_max_count,
+            allow_rule_fallback=not cfg.ai.enabled,
+        )
+        self._comment_engine = CommentEngine(
+            self._ai_client,
+            candidate_count=cfg.ai.comment_candidate_count,
+            allow_rule_fallback=not cfg.ai.enabled,
+        )
 
         selectors = load_selector_map(cfg.selectors.kuaishou_selector_file)
         self._browser = KuaishouClient(cfg.browser, selectors)
@@ -39,8 +48,19 @@ class AutoCommenterOrchestrator:
         self._logger.info("[AI] startup health check")
         self._ensure_ai_ready()
 
-        self._logger.info("[AUTOMATION] start browser client")
-        self._browser.start()
+        self._logger.info(
+            "[AUTOMATION] start browser client | ws_url=%s | headless=%s | action_timeout_ms=%s",
+            bool(self._cfg.browser.ws_url),
+            self._cfg.browser.headless,
+            self._cfg.browser.action_timeout_ms,
+        )
+        browser_start_at = perf_counter()
+        try:
+            self._browser.start()
+        except Exception as exc:  # noqa: BLE001
+            self._logger.error("[AUTOMATION] browser client start failed: %s", exc)
+            raise
+        self._logger.info("[AUTOMATION] browser client ready | elapsed=%.2fs", perf_counter() - browser_start_at)
         self._logger.info(
             "[AUTOMATION] loaded limits: max_comments_per_round=%s daily_comment_limit=%s single_keyword_search=%s",
             self._cfg.runtime.max_comments_per_round,
@@ -85,20 +105,23 @@ class AutoCommenterOrchestrator:
                 self._logger.warning("[AUTOMATION] skip invalid direction keyword=%s", direction)
                 continue
 
-            used_keywords = self._store.get_used_keywords_for_topic(direction, limit=500)
-            keywords = self._expand_keywords(direction, used_keywords)
-            if not keywords:
-                self._logger.info("[AI] no new keywords for direction=%s, skip", direction)
-                continue
+            if self._cfg.runtime.disable_keyword_expansion:
+                keywords = [direction]
+                self._logger.info("[AUTOMATION] keyword expansion disabled, use direct keyword=%s", direction)
+            else:
+                used_keywords = self._store.get_used_keywords_for_topic(direction, limit=500)
+                keywords = self._expand_keywords(direction, used_keywords)
+                if not keywords:
+                    self._logger.info("[AI] no new keywords for direction=%s, skip", direction)
+                    continue
 
-            if self._cfg.runtime.single_keyword_search:
-                keywords = keywords[:1]
+                if self._cfg.runtime.single_keyword_search:
+                    keywords = keywords[:1]
 
             for keyword in keywords:
                 if self._limit_reached(round_comments):
                     return
 
-                self._store.add_used_keyword(direction, keyword)
                 self._logger.info("[AUTOMATION] search keyword=%s | direction=%s", keyword, direction)
                 try:
                     posts = self._browser.search_posts(
@@ -111,6 +134,7 @@ class AutoCommenterOrchestrator:
                     self._logger.warning("[AUTOMATION] search failed keyword=%s error=%s", keyword, exc)
                     continue
 
+                self._store.add_used_keyword(direction, keyword)
                 self._logger.info("[AUTOMATION] fetched %s posts for keyword=%s", len(posts), keyword)
                 for post in posts:
                     if self._limit_reached(round_comments):
@@ -291,7 +315,8 @@ class AutoCommenterOrchestrator:
 
     def _ensure_ai_ready(self) -> None:
         if not self._cfg.ai.enabled:
-            raise RuntimeError("配置要求 AI 必须启用（ai.enabled=true）")
+            self._logger.warning("[AI] ai.enabled=false, use local rule-based fallback")
+            return
 
         self._ai_client.ensure_available()
         self._logger.info("[AI] startup health check passed")

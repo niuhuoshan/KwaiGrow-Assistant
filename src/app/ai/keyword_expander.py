@@ -16,9 +16,10 @@ SYNONYM_MAP = {
 
 
 class KeywordExpander:
-    def __init__(self, ai_client: OpenAIChatClient, max_count: int = 10):
+    def __init__(self, ai_client: OpenAIChatClient, max_count: int = 10, allow_rule_fallback: bool = False):
         self._ai = ai_client
         self._max_count = max_count
+        self._allow_rule_fallback = allow_rule_fallback
         self._logger = logging.getLogger(self.__class__.__name__)
 
     def expand(self, direction: str, used_keywords: List[str] | None = None) -> List[str]:
@@ -26,14 +27,16 @@ class KeywordExpander:
         if not direction:
             return []
 
-        if not self._ai.enabled:
-            raise RuntimeError("AI 不可用，无法扩展关键词")
-
         used = {
             normalize_spaces(v)
             for v in (used_keywords or [])
             if normalize_spaces(v)
         }
+
+        if not self._ai.enabled:
+            if self._allow_rule_fallback:
+                return self._expand_by_rules(direction, used)
+            raise RuntimeError("AI 不可用，无法扩展关键词")
 
         return self._expand_by_ai(direction, used)
 

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 import logging
-from typing import Optional
+from typing import Any, Optional
 
 import httpx
 
@@ -19,6 +19,7 @@ class OpenAIChatClient:
 
         self._base_url = self._normalize_base_url(cfg.base_url)
         self._client: Optional[httpx.Client] = None
+        self._preferred_mode: Optional[str] = None
         if self._enabled:
             self._client = httpx.Client(
                 timeout=cfg.timeout_seconds,
@@ -55,23 +56,88 @@ class OpenAIChatClient:
         temp = self._cfg.temperature if temperature is None else temperature
         tokens = self._cfg.max_tokens if max_tokens is None else max_tokens
 
+        attempts = [
+            ("responses.instructions", lambda: self._chat_via_responses(system_prompt, user_prompt, temp, tokens, use_instruction_field=True)),
+            ("responses.input_items", lambda: self._chat_via_responses(system_prompt, user_prompt, temp, tokens, use_instruction_field=False)),
+            ("chat.completions", lambda: self._chat_via_chat_completions(system_prompt, user_prompt, temp, tokens)),
+        ]
+
+        if self._preferred_mode:
+            ordered = [item for item in attempts if item[0] == self._preferred_mode]
+            ordered.extend(item for item in attempts if item[0] != self._preferred_mode)
+            attempts = ordered
+
+        errors: list[str] = []
+        for mode, runner in attempts:
+            try:
+                text = runner()
+                self._preferred_mode = mode
+                return text
+            except RuntimeError as exc:
+                msg = str(exc)
+                errors.append(f"{mode}: {msg}")
+                if not self._should_fallback(msg):
+                    raise
+
+        raise RuntimeError("all API modes failed: " + " | ".join(errors))
+
+    def _chat_via_responses(
+        self,
+        system_prompt: str,
+        user_prompt: str,
+        temperature: float,
+        max_tokens: int,
+        use_instruction_field: bool,
+    ) -> str:
+        if use_instruction_field:
+            payload: dict[str, Any] = {
+                "model": self._cfg.model_id,
+                "instructions": system_prompt,
+                "input": user_prompt,
+                "temperature": temperature,
+                "max_output_tokens": max_tokens,
+            }
+        else:
+            payload = {
+                "model": self._cfg.model_id,
+                "input": [
+                    {
+                        "role": "system",
+                        "content": [{"type": "input_text", "text": system_prompt}],
+                    },
+                    {
+                        "role": "user",
+                        "content": [{"type": "input_text", "text": user_prompt}],
+                    },
+                ],
+                "temperature": temperature,
+                "max_output_tokens": max_tokens,
+            }
+
+        data = self._post_json("/responses", payload)
+        text = self._extract_text(data)
+        if not text:
+            raise RuntimeError("openai empty response")
+        return text.strip()
+
+    def _chat_via_chat_completions(self, system_prompt: str, user_prompt: str, temperature: float, max_tokens: int) -> str:
         payload = {
             "model": self._cfg.model_id,
-            "input": [
-                {
-                    "role": "system",
-                    "content": [{"type": "input_text", "text": system_prompt}],
-                },
-                {
-                    "role": "user",
-                    "content": [{"type": "input_text", "text": user_prompt}],
-                },
+            "messages": [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt},
             ],
-            "temperature": temp,
-            "max_output_tokens": tokens,
+            "temperature": temperature,
+            "max_tokens": max_tokens,
         }
+        data = self._post_json("/chat/completions", payload)
+        text = self._extract_chat_completions_text(data)
+        if not text:
+            raise RuntimeError("openai empty response")
+        return text.strip()
 
-        url = f"{self._base_url}/responses"
+    def _post_json(self, path: str, payload: dict[str, Any]) -> dict:
+        url = f"{self._base_url}{path}"
         headers = {
             "Authorization": f"Bearer {self._cfg.api_key}",
             "Content-Type": "application/json",
@@ -82,12 +148,43 @@ class OpenAIChatClient:
             body = response.text.strip()
             raise RuntimeError(f"api error {response.status_code}: {body[:300]}")
 
-        data = response.json()
-        text = self._extract_text(data)
-        if not text:
-            raise RuntimeError("openai empty response")
+        try:
+            data = response.json()
+        except Exception as exc:  # noqa: BLE001
+            raise RuntimeError("api returned non-json response") from exc
 
-        return text.strip()
+        if not isinstance(data, dict):
+            raise RuntimeError("api returned invalid json object")
+        return data
+
+    @staticmethod
+    def _should_fallback(error_text: str) -> bool:
+        text = (error_text or "").lower()
+        fallback_codes = (
+            "api error 400",
+            "api error 404",
+            "api error 405",
+            "api error 415",
+            "api error 422",
+            "api error 500",
+            "api error 502",
+            "api error 503",
+            "api error 504",
+        )
+        if any(code in text for code in fallback_codes):
+            return True
+
+        compatibility_hints = (
+            "instructions are required",
+            "unsupported",
+            "not implemented",
+            "unknown field",
+            "invalid request",
+            "unrecognized request",
+            "openai empty response",
+            "api returned invalid json object",
+        )
+        return any(token in text for token in compatibility_hints)
 
     @staticmethod
     def _normalize_base_url(base_url: str) -> str:
@@ -121,5 +218,35 @@ class OpenAIChatClient:
                         chunks.append(text)
             if chunks:
                 return "\n".join(chunks)
+
+        return ""
+
+    @staticmethod
+    def _extract_chat_completions_text(data: dict) -> str:
+        choices = data.get("choices")
+        if not isinstance(choices, list):
+            return ""
+
+        for choice in choices:
+            if not isinstance(choice, dict):
+                continue
+            message = choice.get("message")
+            if not isinstance(message, dict):
+                continue
+
+            content = message.get("content")
+            if isinstance(content, str) and content.strip():
+                return content
+
+            if isinstance(content, list):
+                chunks = []
+                for item in content:
+                    if not isinstance(item, dict):
+                        continue
+                    text = item.get("text")
+                    if isinstance(text, str) and text.strip():
+                        chunks.append(text)
+                if chunks:
+                    return "\n".join(chunks)
 
         return ""

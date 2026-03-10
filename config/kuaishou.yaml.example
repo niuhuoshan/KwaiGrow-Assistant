@@ -57,6 +57,7 @@ runtime:
   daily_comment_limit: 40
   search_limit_per_keyword: 10
   single_keyword_search: true
+  disable_keyword_expansion: false
   comment_every_post: true
   sort_by: latest
   time_range: week

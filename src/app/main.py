@@ -33,6 +33,9 @@ def main() -> int:
         orchestrator.run(once=args.once)
     except KeyboardInterrupt:
         logger.warning("[AUTOMATION] interrupted by user")
+    except Exception as exc:  # noqa: BLE001
+        logger.exception("[AUTOMATION] fatal error: %s", exc)
+        return 1
     finally:
         orchestrator.close()
 

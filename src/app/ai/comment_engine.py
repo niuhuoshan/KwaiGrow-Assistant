@@ -8,9 +8,10 @@ from ..utils.text import normalize_spaces, safe_json_loads, to_clean_string_list
 
 
 class CommentEngine:
-    def __init__(self, ai_client: OpenAIChatClient, candidate_count: int = 3):
+    def __init__(self, ai_client: OpenAIChatClient, candidate_count: int = 3, allow_rule_fallback: bool = False):
         self._ai = ai_client
         self._candidate_count = max(1, min(3, candidate_count))
+        self._allow_rule_fallback = allow_rule_fallback
         self._logger = logging.getLogger(self.__class__.__name__)
 
     def is_commentable(self, post_summary: str, hot_comments_summary: str, requirements: List[str]) -> Tuple[bool, str]:
@@ -21,6 +22,8 @@ class CommentEngine:
             return False, "empty post summary"
 
         if not self._ai.enabled:
+            if self._allow_rule_fallback:
+                return self._judge_by_rules(post_summary)
             raise RuntimeError("AI 不可用，无法进行评论判定")
 
         return self._judge_by_ai(post_summary, hot_comments_summary, requirements)
@@ -30,6 +33,8 @@ class CommentEngine:
         hot_comments_summary = normalize_spaces(hot_comments_summary)
 
         if not self._ai.enabled:
+            if self._allow_rule_fallback:
+                return self._generate_by_rules(post_summary, requirements)
             raise RuntimeError("AI 不可用，无法生成评论")
 
         return self._generate_by_ai(post_summary, hot_comments_summary, requirements)

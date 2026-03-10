@@ -22,7 +22,12 @@ from app.ai.openai_client import OpenAIChatClient
 from app.config import OpenAIModelConfig
 
 ROOT_DIR = Path(__file__).resolve().parents[2]
-DEFAULT_CONFIG = ROOT_DIR / "config.realrun.force.yaml"
+DEFAULT_CONFIG_CANDIDATES = [
+    ROOT_DIR / "config.realrun.local.yaml",
+    ROOT_DIR / "config.realrun.force.yaml",
+    ROOT_DIR / "config.example.yaml",
+]
+DEFAULT_CONFIG = next((path for path in DEFAULT_CONFIG_CANDIDATES if path.exists()), DEFAULT_CONFIG_CANDIDATES[0])
 
 app = Flask(__name__)
 _STATE: Dict[str, Any] = {"proc": None}
@@ -69,10 +74,12 @@ HTML = """
     }
 
     .wrap {
-      width: min(100%, 1700px);
+      width: min(100%, 1280px);
       margin: 0 auto;
       display: grid;
       gap: 12px;
+      min-width: 0;
+      overflow-x: visible;
     }
 
     .card {
@@ -80,15 +87,42 @@ HTML = """
       border-radius: 12px;
       background: linear-gradient(180deg, rgba(255,255,255,0.03), rgba(255,255,255,0.01));
       overflow: hidden;
+      min-width: 0;
     }
 
     .topbar {
       padding: 14px 16px;
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      align-items: start;
+      gap: 10px;
+    }
+
+    .topbar-left {
+      min-width: 0;
+    }
+
+    .topbar-right {
       display: flex;
-      justify-content: space-between;
+      gap: 8px;
+      align-items: center;
+      flex-wrap: wrap;
+      justify-content: flex-start;
+      min-width: 0;
+    }
+
+    .title-row {
+      display: flex;
       align-items: center;
       gap: 10px;
       flex-wrap: wrap;
+      min-width: 0;
+    }
+
+    #configPath {
+      display: inline;
+      word-break: break-all;
+      overflow-wrap: anywhere;
     }
 
     h1 { margin: 0; font-size: clamp(18px, 2vw, 22px); }
@@ -134,11 +168,12 @@ HTML = """
     .stats {
       display: grid;
       gap: 10px;
-      grid-template-columns: repeat(4, minmax(0, 1fr));
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
     }
 
     .stat {
       min-height: 90px;
+      min-width: 0;
       padding: 12px;
       display: flex;
       flex-direction: column;
@@ -146,13 +181,25 @@ HTML = """
     }
 
     .stat .k { color: var(--muted); font-size: 12px; }
-    .stat .v { font-size: clamp(20px, 2.4vw, 28px); font-weight: 800; }
+    .stat .v {
+      font-size: clamp(18px, 2.2vw, 28px);
+      font-weight: 800;
+      overflow-wrap: anywhere;
+      word-break: break-word;
+      line-height: 1.15;
+    }
 
     .layout {
-      display: grid;
-      gap: 12px;
-      grid-template-columns: 1fr;
-      align-items: start;
+      display: block;
+      min-width: 0;
+    }
+
+    .layout > * {
+      min-width: 0;
+    }
+
+    .layout > * + * {
+      margin-top: 12px;
     }
 
     .section-title {
@@ -164,7 +211,10 @@ HTML = """
       font-weight: 700;
     }
 
-    .panel-body { padding: 12px 14px; }
+    .panel-body {
+      padding: 12px 14px;
+      min-width: 0;
+    }
 
     label {
       display: block;
@@ -211,6 +261,7 @@ HTML = """
       text-decoration: none;
       font-size: 13px;
       white-space: nowrap;
+      max-width: 100%;
     }
 
     .btn.secondary { background: rgba(255,255,255,0.03); }
@@ -253,12 +304,18 @@ HTML = """
 
     .switch-row {
       margin: 10px 0 4px;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      align-items: start;
       gap: 12px;
       font-size: 13px;
       font-weight: 600;
+    }
+
+    .switch-row span {
+      min-width: 0;
+      line-height: 1.35;
+      overflow-wrap: anywhere;
     }
 
     .switch {
@@ -339,20 +396,24 @@ HTML = """
     .tables {
       display: grid;
       gap: 12px;
-      grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+      grid-template-columns: 1fr;
       width: 100%;
       min-width: 0;
     }
 
+    .tables > .card { min-width: 0; }
+
     .table-wrap {
       max-height: 360px;
-      overflow: auto;
+      overflow-x: auto;
+      overflow-y: auto;
       width: 100%;
       min-width: 0;
     }
 
     table {
       width: 100%;
+      min-width: 0;
       border-collapse: collapse;
       table-layout: fixed;
     }
@@ -440,28 +501,39 @@ HTML = """
     .modal-actions { padding: 10px 16px 14px; display: flex; justify-content: flex-end; }
 
     @media (max-width: 1360px) {
-      .layout { grid-template-columns: 1fr; }
-      .stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .stats { grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); }
       .tables { grid-template-columns: 1fr; }
+    }
+
+    @media (max-width: 980px) {
+      .topbar { grid-template-columns: 1fr; }
+      .topbar-right { justify-content: flex-start; }
     }
 
     @media (max-width: 720px) {
       .stats { grid-template-columns: 1fr; }
       body { padding: 10px; }
+      .tables { grid-template-columns: 1fr; }
+      .control-buttons, .buttons { flex-direction: column; align-items: stretch; }
+      .control-inline-form { width: 100%; }
+      .control-btn, .btn { width: 100%; }
+      button, .btn { white-space: normal; }
     }
   </style>
 </head>
 <body>
   <div class="wrap">
     <div class="card topbar">
-      <div>
-        <h1>KS Auto Commenter 控制台</h1>
+      <div class="topbar-left">
+        <div class="title-row">
+          <h1>KS Auto Commenter 控制台</h1>
+          <button type="button" class="btn secondary" id="settingsToggle">设置</button>
+        </div>
         <div class="muted">配置文件：<span id="configPath">{{ config_path }}</span></div>
       </div>
-      <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+      <div class="topbar-right">
         <span class="pill" id="runBadge"><span class="dot"></span><span id="runText">{{ run_status }}</span></span>
         <span class="pill">最近刷新：<span id="lastUpdated">--</span></span>
-        <button type="button" class="btn secondary" id="settingsToggle">设置</button>
       </div>
     </div>
 
@@ -543,6 +615,15 @@ HTML = """
             <div class="muted">开启=每轮只取 AI 扩展的第1个新词</div>
 
             <div class="switch-row">
+              <span>关闭关键词联想（按输入词直搜）</span>
+              <label class="switch" for="disable_keyword_expansion">
+                <input id="disable_keyword_expansion" class="switch-input" type="checkbox" name="disable_keyword_expansion" {% if cfg.runtime.disable_keyword_expansion %}checked{% endif %} />
+                <span class="switch-slider"></span>
+              </label>
+            </div>
+            <div class="muted">开启=输入什么关键词就搜索什么关键词，不走 AI 扩词</div>
+
+            <div class="switch-row">
               <span>严格评论判定</span>
               <label class="switch" for="strict_comment_gate">
                 <input id="strict_comment_gate" class="switch-input" type="checkbox" name="strict_comment_gate" {% if cfg.ai.strict_comment_gate %}checked{% endif %} />
@@ -590,7 +671,7 @@ HTML = """
             <h3 class="section-title">评论日志（每秒动态）</h3>
             <div class="table-wrap">
               <table>
-                <thead><tr><th style="width:120px">时间</th><th style="width:80px">关键词</th><th style="width:210px">帖子ID</th><th>评论内容</th></tr></thead>
+                <thead><tr><th style="width:108px">时间</th><th style="width:72px">关键词</th><th style="width:150px">帖子ID</th><th>评论内容</th></tr></thead>
                 <tbody id="commentRows"></tbody>
               </table>
             </div>
@@ -600,7 +681,7 @@ HTML = """
             <h3 class="section-title">关键词历史（防重复）</h3>
             <div class="table-wrap">
               <table>
-                <thead><tr><th style="width:120px">时间</th><th style="width:90px">方向词</th><th>已用关键词</th></tr></thead>
+                <thead><tr><th style="width:108px">时间</th><th style="width:84px">方向词</th><th>已用关键词</th></tr></thead>
                 <tbody id="keywordRows"></tbody>
               </table>
             </div>
@@ -935,9 +1016,54 @@ def _db_stats(db_path: Path) -> Dict[str, int]:
         conn.close()
 
 
-def _find_runner_pid(config_path: Optional[Path] = None) -> Optional[int]:
-    current_pid = os.getpid()
-    normalized_config = str(config_path.resolve()) if config_path else None
+def _iter_process_entries() -> List[Tuple[int, str]]:
+    if os.name == "nt":
+        scripts = [
+            (
+                "$ErrorActionPreference='SilentlyContinue'; "
+                "Get-CimInstance Win32_Process | "
+                "Where-Object { $_.CommandLine } | "
+                "ForEach-Object { \"$($_.ProcessId)`t$($_.CommandLine)\" }"
+            ),
+            (
+                "$ErrorActionPreference='SilentlyContinue'; "
+                "Get-WmiObject Win32_Process | "
+                "Where-Object { $_.CommandLine } | "
+                "ForEach-Object { \"$($_.ProcessId)`t$($_.CommandLine)\" }"
+            ),
+        ]
+
+        for script in scripts:
+            try:
+                result = subprocess.run(
+                    ["powershell", "-NoProfile", "-Command", script],
+                    check=False,
+                    capture_output=True,
+                    text=True,
+                )
+            except Exception:
+                continue
+
+            if result.returncode != 0:
+                continue
+
+            entries: List[Tuple[int, str]] = []
+            for line in (result.stdout or "").splitlines():
+                line = line.strip()
+                if not line:
+                    continue
+                if "\t" not in line:
+                    continue
+                pid_text, args_text = line.split("\t", 1)
+                pid_text = pid_text.strip()
+                if not pid_text.isdigit():
+                    continue
+                entries.append((int(pid_text), args_text.strip()))
+
+            if entries:
+                return entries
+
+        return []
 
     try:
         result = subprocess.run(
@@ -947,25 +1073,31 @@ def _find_runner_pid(config_path: Optional[Path] = None) -> Optional[int]:
             text=True,
         )
     except Exception:
-        return None
+        return []
 
     if result.returncode != 0:
-        return None
+        return []
 
+    entries = []
     for line in (result.stdout or "").splitlines():
         line = line.strip()
         if not line:
             continue
-
         parts = line.split(maxsplit=1)
         if len(parts) != 2:
             continue
-
         pid_text, args_text = parts
         if not pid_text.isdigit():
             continue
+        entries.append((int(pid_text), args_text))
+    return entries
 
-        pid = int(pid_text)
+
+def _find_runner_pid(config_path: Optional[Path] = None) -> Optional[int]:
+    current_pid = os.getpid()
+    normalized_config = str(config_path.resolve()) if config_path else None
+
+    for pid, args_text in _iter_process_entries():
         if pid == current_pid:
             continue
 
@@ -1027,7 +1159,15 @@ def _stop_running(config_path: Optional[Path] = None) -> bool:
     pid = _find_runner_pid(config_path)
     if pid:
         try:
-            os.kill(pid, signal.SIGTERM)
+            if os.name == "nt":
+                subprocess.run(
+                    ["taskkill", "/PID", str(pid), "/T", "/F"],
+                    check=False,
+                    capture_output=True,
+                    text=True,
+                )
+            else:
+                os.kill(pid, signal.SIGTERM)
             stopped = True
         except ProcessLookupError:
             pass
@@ -1059,13 +1199,14 @@ def _apply_defaults(cfg: Dict[str, Any]) -> Dict[str, Any]:
     runtime.setdefault("max_comments_per_round", 5)
     runtime.setdefault("search_limit_per_keyword", 5)
     runtime.setdefault("single_keyword_search", True)
+    runtime.setdefault("disable_keyword_expansion", False)
     runtime.setdefault("comment_every_post", True)
 
     topics.setdefault("direction_keywords", ["美女"])
     comment_rules.setdefault("requirements", ["先认可观点，再补一句虚心求教，语气自然"])
 
-    logging_cfg.setdefault("file_path", "./logs/app-realrun-force.log")
-    dedup_cfg.setdefault("sqlite_path", "./data/dedup-realrun-force.sqlite3")
+    logging_cfg.setdefault("file_path", "./logs/app.log")
+    dedup_cfg.setdefault("sqlite_path", "./data/dedup.sqlite3")
 
     return cfg
 
@@ -1129,6 +1270,12 @@ def _classify_alert(log_text: str, running: bool) -> Dict[str, str]:
         }
 
     rules = [
+        {
+            "regex": r"browser client start failed|Playwright 启动被系统拒绝访问|WinError 5|persistent browser launch failed|CDP relay 未连接",
+            "level": "error",
+            "title": "浏览器启动失败",
+            "hint": "请确认浏览器权限、CDP relay 可用，以及安全软件未拦截 Playwright 子进程。",
+        },
         {
             "regex": r"api error 401|api error 403",
             "level": "error",
@@ -1349,6 +1496,7 @@ def save():
     runtime["max_comments_per_round"] = int(request.form.get("max_comments_per_round") or 5)
     runtime["search_limit_per_keyword"] = int(request.form.get("search_limit_per_keyword") or 5)
     runtime["single_keyword_search"] = bool(request.form.get("single_keyword_search"))
+    runtime["disable_keyword_expansion"] = bool(request.form.get("disable_keyword_expansion"))
     runtime["comment_every_post"] = bool(request.form.get("comment_every_post"))
 
     direction_keywords = [v.strip() for v in (request.form.get("direction_keywords") or "").split(",") if v.strip()]
