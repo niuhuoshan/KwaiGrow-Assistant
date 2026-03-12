@@ -1,17 +1,17 @@
 from __future__ import annotations
 
-import hashlib
-import hmac
-import json
 import logging
 import os
 import re
-import socket
+import shutil
+import subprocess
 import time
 from time import perf_counter
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
-from urllib.parse import quote, unquote, urlparse, urlunparse, parse_qsl, urlencode, urljoin
+from urllib.parse import quote, unquote, urlparse, parse_qsl, urljoin
+from urllib.request import urlopen
+from urllib.error import URLError
 
 from playwright.sync_api import Browser, BrowserContext, Page, Playwright, TimeoutError as PlaywrightTimeoutError, sync_playwright
 
@@ -42,11 +42,13 @@ class KuaishouClient:
             "[BROWSER] start begin | mode=%s | headless=%s | ws_url=%s | user_data_dir=%s | action_timeout_ms=%s",
             "cdp" if self._cfg.ws_url else "persistent",
             self._cfg.headless,
-            self._mask_url_for_log(self._cfg.ws_url) if self._cfg.ws_url else "",
+            self._cfg.ws_url if self._cfg.ws_url else "",
             self._cfg.user_data_dir,
             self._cfg.action_timeout_ms,
         )
 
+        _proxy_keys = ["http_proxy", "https_proxy", "HTTP_PROXY", "HTTPS_PROXY", "all_proxy", "ALL_PROXY"]
+        _saved_proxy = {k: os.environ.pop(k) for k in _proxy_keys if k in os.environ}
         try:
             self._logger.info("[BROWSER] init playwright runtime")
             self._playwright = sync_playwright().start()
@@ -58,38 +60,32 @@ class KuaishouClient:
             ) from exc
         except Exception as exc:
             raise RuntimeError(f"Playwright runtime start failed: {exc}") from exc
+        finally:
+            os.environ.update(_saved_proxy)
 
         if self._cfg.ws_url:
-            cdp_url = self._inject_relay_token(self._cfg.ws_url)
-            parsed_cdp = urlparse(cdp_url)
-            cdp_host = parsed_cdp.hostname or ""
-            cdp_port = parsed_cdp.port or (443 if parsed_cdp.scheme == "wss" else 80)
-            tcp_ready = self._check_tcp_port(cdp_host, cdp_port, timeout_seconds=1.5)
-            self._logger.info(
-                "[BROWSER] CDP precheck | host=%s | port=%s | tcp_reachable=%s",
-                cdp_host,
-                cdp_port,
-                tcp_ready,
-            )
-            self._logger.info("[BROWSER] connect CDP relay | url=%s", self._mask_url_for_log(cdp_url))
+            port = self._cfg.remote_debugging_port
+            if self._cfg.auto_launch_chrome and not self._is_cdp_port_ready(port):
+                self._logger.info("[BROWSER] CDP port not ready, auto-launching Chrome...")
+                self._auto_launch_chrome(port)
+            self._logger.info("[BROWSER] connect CDP | url=%s", self._cfg.ws_url)
             try:
                 self._cdp_browser = self._playwright.chromium.connect_over_cdp(
-                    cdp_url,
+                    self._cfg.ws_url,
                     timeout=self._cfg.action_timeout_ms,
                 )
                 self._logger.info("[BROWSER] CDP connected")
             except Exception as exc:
                 raise RuntimeError(
-                    "CDP relay 未连接。请先在本机 Chrome 打开目标标签页并点击 OpenClaw Browser Relay 扩展图标使其 ON。"
+                    f"CDP 连接失败（{self._cfg.ws_url}）。"
+                    "请确认 Chrome 已用 --remote-debugging-port 启动，或检查 ws_url 配置。"
                 ) from exc
             contexts = self._cdp_browser.contexts
             self._logger.info("[BROWSER] CDP contexts=%s", len(contexts))
             if not contexts:
                 self._context = self._cdp_browser.new_context()
-                self._logger.info("[BROWSER] create new CDP context")
             else:
                 self._context = contexts[0]
-                self._logger.info("[BROWSER] reuse existing CDP context")
         else:
             user_data_dir = Path(self._cfg.user_data_dir)
             user_data_dir.mkdir(parents=True, exist_ok=True)
@@ -287,6 +283,7 @@ class KuaishouClient:
                     pass
 
             if self._confirm_comment_submitted(comment_text, responses):
+                self._close_video_overlay()
                 return
 
             self._logger.warning(
@@ -305,6 +302,7 @@ class KuaishouClient:
 
         card = self._parse_card_post_id(post.post_id)
         if card:
+            self._close_video_overlay()
             keyword = card["keyword"]
             index = card["index"]
             search_url = f"https://www.kuaishou.com/search/video?searchKey={quote(keyword)}"
@@ -344,8 +342,90 @@ class KuaishouClient:
         self._sleep(self._cfg.post_load_wait_ms)
         self._current_search_keyword = None
 
+    def _find_chrome_executable(self) -> Optional[str]:
+        if self._cfg.executable_path:
+            return self._cfg.executable_path
+
+        username = os.environ.get("USERNAME") or os.environ.get("LOGNAME") or ""
+
+        # Windows native paths (when running on Windows directly)
+        candidate_paths = [
+            r"C:\Program Files\Google\Chrome\Application\chrome.exe",
+            r"C:\Program Files (x86)\Google\Chrome\Application\chrome.exe",
+        ]
+        if username:
+            candidate_paths.append(
+                rf"C:\Users\{username}\AppData\Local\Google\Chrome\Application\chrome.exe"
+            )
+
+        # WSL paths (when running inside WSL)
+        candidate_paths += [
+            "/mnt/c/Program Files/Google/Chrome/Application/chrome.exe",
+            "/mnt/c/Program Files (x86)/Google/Chrome/Application/chrome.exe",
+        ]
+        if username:
+            candidate_paths.append(
+                f"/mnt/c/Users/{username}/AppData/Local/Google/Chrome/Application/chrome.exe"
+            )
+
+        for p in candidate_paths:
+            if Path(p).exists():
+                return p
+
+        # Linux system paths
+        for name in ("google-chrome", "chromium-browser", "chromium"):
+            found = shutil.which(name)
+            if found:
+                return found
+
+        return None
+
+    def _is_cdp_port_ready(self, port: int) -> bool:
+        url = f"http://127.0.0.1:{port}/json/version"
+        deadline = time.monotonic() + 10
+        while time.monotonic() < deadline:
+            try:
+                urlopen(url, timeout=1)
+                return True
+            except (URLError, OSError):
+                time.sleep(0.5)
+        return False
+
+    def _auto_launch_chrome(self, port: int) -> None:
+        exe = self._find_chrome_executable()
+        if not exe:
+            raise RuntimeError("找不到 Chrome，请在配置中设置 browser.executable_path")
+
+        user_data_dir = str(Path(self._cfg.user_data_dir).resolve())
+        cmd = [
+            exe,
+            f"--remote-debugging-port={port}",
+            f"--user-data-dir={user_data_dir}",
+            "--no-first-run",
+            "--no-default-browser-check",
+        ]
+        subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        self._logger.info("[BROWSER] auto-launched Chrome port=%s exe=%s", port, exe)
+
+        if not self._is_cdp_port_ready(port):
+            raise RuntimeError(f"Chrome 启动超时，调试端口 {port} 未就绪")
+
+    def _close_video_overlay(self) -> None:
+        """Close video overlay/player if currently open, returning to search page state."""
+        page = self._require_page()
+        if "/search/video" not in (page.url or ""):
+            try:
+                page.keyboard.press("Escape")
+                self._sleep(400)
+            except Exception:
+                pass
+
     def _collect_posts(self, limit: int) -> List[Post]:
         page = self._require_page()
+        # Scroll to load more content before scanning
+        for _ in range(3):
+            page.mouse.wheel(0, 1200)
+            self._sleep(600)
         selector = self._selectors.get("post_link", "a[href*='/short-video/'], a[href*='/video/'], a[href*='photoId=']")
 
         posts: List[Post] = []
@@ -796,11 +876,9 @@ class KuaishouClient:
         return False
 
     def _confirm_comment_submitted(self, comment_text: str, responses: List[Tuple[int, str, str]]) -> bool:
+        # 1. Network signal: any 2xx POST to a comment-related URL
         success_by_post_api = any(
-            200 <= status < 300
-            and method == "POST"
-            and ("comment" in url)
-            and any(key in url for key in ["add", "create", "submit", "publish", "post"])
+            200 <= status < 300 and method == "POST" and "comment" in url
             for status, method, url in responses
         )
         if success_by_post_api:
@@ -839,12 +917,8 @@ class KuaishouClient:
         if still_in_input:
             return False
 
-        body_text = normalize_spaces(page.locator("body").inner_text() or "")
-        toast_hit = any(key in body_text for key in ["发送成功", "评论成功", "发布成功", "已发送"])
-        if toast_hit:
-            return True
-
-        return False
+        # 2. Text is gone from input — treat as submitted (toast may have already faded)
+        return True
 
     def _fill_first(self, selector: str, text: str, timeout: int = 4000) -> bool:
         page = self._require_page()
@@ -899,72 +973,6 @@ class KuaishouClient:
                 continue
         return False
 
-    def _inject_relay_token(self, ws_url: str) -> str:
-        parsed = urlparse(ws_url)
-        if parsed.scheme not in {"ws", "wss"}:
-            return ws_url
-
-        if "/cdp" not in parsed.path:
-            return ws_url
-
-        query = dict(parse_qsl(parsed.query))
-        if query.get("token"):
-            return ws_url
-
-        gateway_token = self._resolve_gateway_token()
-        if not gateway_token:
-            return ws_url
-
-        port = parsed.port or (443 if parsed.scheme == "wss" else 80)
-        relay_token = hmac.new(
-            gateway_token.encode("utf-8"),
-            f"openclaw-extension-relay-v1:{port}".encode("utf-8"),
-            hashlib.sha256,
-        ).hexdigest()
-
-        query["token"] = relay_token
-        patched_query = urlencode(query)
-        return urlunparse(parsed._replace(query=patched_query))
-
-    @staticmethod
-    def _mask_url_for_log(url: Optional[str]) -> str:
-        if not url:
-            return ""
-        try:
-            parsed = urlparse(url)
-            query = dict(parse_qsl(parsed.query))
-            if "token" in query and query["token"]:
-                query["token"] = "***"
-            return urlunparse(parsed._replace(query=urlencode(query)))
-        except Exception:
-            return str(url)
-
-    @staticmethod
-    def _check_tcp_port(host: str, port: int, timeout_seconds: float = 1.5) -> bool:
-        if not host or not port:
-            return False
-        try:
-            with socket.create_connection((host, port), timeout=timeout_seconds):
-                return True
-        except Exception:
-            return False
-
-    @staticmethod
-    def _resolve_gateway_token() -> str:
-        from_env = (os.getenv("OPENCLAW_GATEWAY_TOKEN") or "").strip()
-        if from_env:
-            return from_env
-
-        cfg_path = Path.home() / ".openclaw" / "openclaw.json"
-        if not cfg_path.exists():
-            return ""
-
-        try:
-            payload = json.loads(cfg_path.read_text(encoding="utf-8"))
-            return str(payload.get("gateway", {}).get("auth", {}).get("token") or "").strip()
-        except Exception:
-            return ""
-
     def _sleep(self, milliseconds: int) -> None:
         time.sleep(max(0, milliseconds) / 1000.0)
 
@@ -972,3 +980,10 @@ class KuaishouClient:
         if self._page is None:
             raise RuntimeError("browser page not initialized, call start() first")
         return self._page
+
+    def get_current_url(self) -> str:
+        page = self._require_page()
+        return page.url or ""
+
+    def extract_post_id_from_url(self, url: str) -> str:
+        return self._extract_post_id(url)

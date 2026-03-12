@@ -70,7 +70,9 @@ class OpenAIChatClient:
         errors: list[str] = []
         for mode, runner in attempts:
             try:
+                self._logger.debug("[AI] chat attempt mode=%s system_prompt=%.200s user_prompt=%.300s", mode, system_prompt, user_prompt)
                 text = runner()
+                self._logger.debug("[AI] chat success mode=%s response=%.300s", mode, text)
                 self._preferred_mode = mode
                 return text
             except RuntimeError as exc:

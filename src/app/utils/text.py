@@ -5,9 +5,28 @@ import json
 import re
 from typing import Any, Dict, List
 
+_RE_SPACES = re.compile(r"\s+")
+_RE_CODE_BLOCK = re.compile(r"```(?:json)?\s*(.*?)```", re.S)
+_RE_BRACE = re.compile(r"\{.*?\}", re.S)
+_RE_BRACKET = re.compile(r"\[.*?\]", re.S)
+
+_KEYWORD_PUNCT = frozenset(["，", "。", "！", "？", "；", ",", ".", "!", "?", "#", "\n"])
+
 
 def normalize_spaces(value: str) -> str:
-    return re.sub(r"\s+", " ", (value or "")).strip()
+    return _RE_SPACES.sub(" ", (value or "")).strip()
+
+
+def is_valid_keyword(text: str) -> bool:
+    if not text:
+        return False
+    if len(text) < 2 or len(text) > 16:
+        return False
+    if any(mark in text for mark in _KEYWORD_PUNCT):
+        return False
+    if text.count(" ") > 1:
+        return False
+    return True
 
 
 def short_hash(value: str) -> str:
@@ -24,7 +43,7 @@ def safe_json_loads(raw: str) -> Any:
     except json.JSONDecodeError:
         pass
 
-    match = re.search(r"```(?:json)?\s*(.*?)```", text, flags=re.S)
+    match = _RE_CODE_BLOCK.search(text)
     if match:
         snippet = match.group(1).strip()
         try:
@@ -32,14 +51,14 @@ def safe_json_loads(raw: str) -> Any:
         except json.JSONDecodeError:
             return None
 
-    brace = re.search(r"\{.*\}", text, flags=re.S)
+    brace = _RE_BRACE.search(text)
     if brace:
         try:
             return json.loads(brace.group(0))
         except json.JSONDecodeError:
             pass
 
-    bracket = re.search(r"\[.*\]", text, flags=re.S)
+    bracket = _RE_BRACKET.search(text)
     if bracket:
         try:
             return json.loads(bracket.group(0))

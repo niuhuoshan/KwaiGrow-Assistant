@@ -53,6 +53,7 @@ HTML = """
       --danger: #ef4444;
       --accent: #60a5fa;
       --info: #38bdf8;
+      color-scheme: dark;
     }
 
     * { box-sizing: border-box; }
@@ -136,6 +137,7 @@ HTML = """
       border-radius: 999px;
       padding: 6px 10px;
       font-size: 12px;
+      font-variant-numeric: tabular-nums;
       background: rgba(255,255,255,0.03);
     }
 
@@ -184,6 +186,7 @@ HTML = """
     .stat .v {
       font-size: clamp(18px, 2.2vw, 28px);
       font-weight: 800;
+      font-variant-numeric: tabular-nums;
       overflow-wrap: anywhere;
       word-break: break-word;
       line-height: 1.15;
@@ -423,6 +426,7 @@ HTML = """
       color: var(--muted);
       font-size: 12px;
       font-weight: 600;
+      font-variant-numeric: tabular-nums;
       border-bottom: 1px solid var(--line);
       padding: 8px 6px;
       position: sticky;
@@ -435,6 +439,7 @@ HTML = """
       padding: 8px 6px;
       border-bottom: 1px solid rgba(255,255,255,0.04);
       font-size: 12px;
+      font-variant-numeric: tabular-nums;
       vertical-align: top;
       word-break: break-word;
       overflow-wrap: anywhere;
@@ -466,40 +471,6 @@ HTML = """
     .txt-warn { color: var(--warn); }
     .txt-danger { color: var(--danger); }
 
-    .modal {
-      position: fixed;
-      inset: 0;
-      display: none;
-      justify-content: center;
-      align-items: center;
-      background: rgba(6, 11, 20, 0.58);
-      z-index: 9999;
-      padding: 16px;
-    }
-
-    .modal.open { display: flex; }
-
-    .modal-card {
-      width: min(720px, 100%);
-      border: 1px solid rgba(239,68,68,0.55);
-      border-radius: 14px;
-      background: #1a1220;
-      box-shadow: 0 20px 60px rgba(0,0,0,.45);
-      overflow: hidden;
-    }
-
-    .modal-head {
-      padding: 14px 16px;
-      background: rgba(239,68,68,0.16);
-      border-bottom: 1px solid rgba(239,68,68,0.45);
-      font-size: clamp(18px, 2.2vw, 28px);
-      font-weight: 900;
-      color: #ffd7dc;
-    }
-
-    .modal-body { padding: 14px 16px; font-size: 14px; line-height: 1.55; color: #ffe8ea; }
-    .modal-actions { padding: 10px 16px 14px; display: flex; justify-content: flex-end; }
-
     @media (max-width: 1360px) {
       .stats { grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); }
       .tables { grid-template-columns: 1fr; }
@@ -527,7 +498,6 @@ HTML = """
       <div class="topbar-left">
         <div class="title-row">
           <h1>KS Auto Commenter 控制台</h1>
-          <button type="button" class="btn secondary" id="settingsToggle">设置</button>
         </div>
         <div class="muted">配置文件：<span id="configPath">{{ config_path }}</span></div>
       </div>
@@ -540,6 +510,8 @@ HTML = """
     <div class="card control-panel">
       <div class="panel-body">
         <div class="control-buttons">
+          <button type="button" class="btn secondary" id="settingsToggle">设置</button>
+
           <form class="control-inline-form" method="post" action="{{ url_for('run_once') }}">
             <input type="hidden" name="config_path" value="{{ config_path }}" />
             <button class="control-btn" type="submit" name="run_mode" value="once">开始任务（单轮）</button>
@@ -562,7 +534,7 @@ HTML = """
       </div>
     </div>
 
-    <div id="alertBanner" class="alert-banner {{ initial_alert_class }}">
+    <div id="alertBanner" class="alert-banner {{ initial_alert_class }}{% if initial_alert_class == 'alert-info' %} hidden{% endif %}">
       <div id="alertTitle" class="alert-title">{{ initial_alert_title }}</div>
       <div id="alertMessage" class="muted">{{ initial_alert_message }}</div>
       <div id="alertHint" class="muted">{{ initial_alert_hint }}</div>
@@ -595,6 +567,23 @@ HTML = """
               <button type="button" class="btn secondary" id="testConnectionBtn">测试连接</button>
             </div>
             <pre id="testConnectionLog" class="test-log">点击“测试连接”可查看连通结果与详细错误日志。</pre>
+
+            <div class="switch-row">
+              <span>显示浏览器窗口（非无头模式）</span>
+              <label class="switch" for="headless">
+                <input id="headless" class="switch-input" type="checkbox" name="headless" {% if not cfg.browser.headless %}checked{% endif %} />
+                <span class="switch-slider"></span>
+              </label>
+            </div>
+            <div class="muted">开启=弹出真实浏览器窗口，可手动登录；关闭=无头后台运行</div>
+
+            <label>CDP 远程调试地址（可选）</label>
+            <input type="text" name="ws_url" value="{{ cfg.browser.ws_url or '' }}" placeholder="如 http://127.0.0.1:9222，留空则自动启动" />
+            <div class="muted">填入后连接已有 Chrome 调试端口，留空则自动拉起 Chrome</div>
+
+            <label>Chrome 可执行文件路径（可选）</label>
+            <input type="text" name="executable_path" value="{{ cfg.browser.executable_path or '' }}" placeholder="如 C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe" />
+            <div class="muted">留空=自动检测；填写后优先使用此路径</div>
 
             <div class="switch-row">
               <span>每条帖子都重新搜索（老模式）</span>
@@ -700,16 +689,6 @@ HTML = """
     </div>
   </div>
 
-  <div id="errorModal" class="modal">
-    <div class="modal-card">
-      <div class="modal-head" id="modalTitle">系统告警</div>
-      <div class="modal-body" id="modalBody">--</div>
-      <div class="modal-actions">
-        <button onclick="closeModal()">我知道了</button>
-      </div>
-    </div>
-  </div>
-
   <script>
     const configPath = {{ config_path | tojson }};
     const initialData = {{ initial_payload | tojson }};
@@ -733,18 +712,12 @@ HTML = """
     const runtimeLog = document.getElementById('runtimeLog');
     const autoScroll = document.getElementById('autoScroll');
 
-    const errorModal = document.getElementById('errorModal');
-    const modalTitle = document.getElementById('modalTitle');
-    const modalBody = document.getElementById('modalBody');
-
     const settingsToggle = document.getElementById('settingsToggle');
     const settingsPanel = document.getElementById('settingsPanel');
     const settingsClose = document.getElementById('settingsClose');
     const settingsForm = document.getElementById('settingsForm');
     const testConnectionBtn = document.getElementById('testConnectionBtn');
     const testConnectionLog = document.getElementById('testConnectionLog');
-
-    let lastAlertKey = '';
 
     function esc(value) {
       return String(value == null ? '' : value)
@@ -754,11 +727,6 @@ HTML = """
         .replace(/"/g, '&quot;')
         .replace(/'/g, '&#39;');
     }
-
-    function closeModal() {
-      errorModal.classList.remove('open');
-    }
-    window.closeModal = closeModal;
 
     function setSettingsVisible(visible) {
       if (!settingsPanel) return;
@@ -825,24 +793,18 @@ HTML = """
       const message = safeAlert.message || '--';
       const hint = safeAlert.hint || '';
 
-      alertBanner.classList.remove('alert-info', 'alert-warn', 'alert-error');
+      if (level === 'info' || level === 'ok' || !level) {
+        alertBanner.classList.add('hidden');
+        return;
+      }
+
+      alertBanner.classList.remove('hidden', 'alert-info', 'alert-warn', 'alert-error');
       if (level === 'error') alertBanner.classList.add('alert-error');
-      else if (level === 'warn') alertBanner.classList.add('alert-warn');
-      else alertBanner.classList.add('alert-info');
+      else alertBanner.classList.add('alert-warn');
 
       alertTitle.textContent = title;
       alertMessage.textContent = message;
       alertHint.textContent = hint;
-
-      if (level === 'error') {
-        const key = safeAlert.key || title + message;
-        if (key && key !== lastAlertKey) {
-          lastAlertKey = key;
-          modalTitle.textContent = title;
-          modalBody.textContent = `${message}${hint ? '\\n\\n建议：' + hint : ''}`;
-          errorModal.classList.add('open');
-        }
-      }
     }
 
     function renderStatus(payload) {
@@ -1193,6 +1155,9 @@ def _apply_defaults(cfg: Dict[str, Any]) -> Dict[str, Any]:
     openai_cfg.setdefault("api_key", "${OPENAI_API_KEY}")
 
     browser.setdefault("search_each_post", False)
+    browser.setdefault("headless", False)
+    browser.setdefault("ws_url", None)
+    browser.setdefault("executable_path", None)
     ai.setdefault("strict_comment_gate", False)
     ai.setdefault("keyword_max_count", 10)
 
@@ -1486,7 +1451,13 @@ def save():
     if api_key:
         openai_cfg["api_key"] = api_key
 
-    cfg.setdefault("browser", {})["search_each_post"] = bool(request.form.get("search_each_post"))
+    browser_cfg = cfg.setdefault("browser", {})
+    browser_cfg["search_each_post"] = bool(request.form.get("search_each_post"))
+    browser_cfg["headless"] = not bool(request.form.get("headless"))
+    ws_url = (request.form.get("ws_url") or "").strip()
+    browser_cfg["ws_url"] = ws_url if ws_url else None
+    executable_path = (request.form.get("executable_path") or "").strip()
+    browser_cfg["executable_path"] = executable_path if executable_path else None
 
     ai = cfg.setdefault("ai", {})
     ai["strict_comment_gate"] = bool(request.form.get("strict_comment_gate"))

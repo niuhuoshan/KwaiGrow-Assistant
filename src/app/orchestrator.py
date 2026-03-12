@@ -4,7 +4,7 @@ import logging
 import random
 import time
 from time import perf_counter
-from typing import List, Set
+from typing import List
 
 from .ai.comment_engine import CommentEngine
 from .ai.keyword_expander import KeywordExpander
@@ -13,7 +13,7 @@ from .browser.kuaishou_client import KuaishouClient
 from .config import AppConfig, WaitRange, load_selector_map
 from .schema import CommentRecord, Post
 from .storage.dedup_store import DedupStore
-from .utils.text import short_hash, truncate
+from .utils.text import is_valid_keyword, normalize_spaces, short_hash, truncate
 
 
 class AutoCommenterOrchestrator:
@@ -101,7 +101,7 @@ class AutoCommenterOrchestrator:
 
         round_comments = 0
         for direction in self._unique_direction_keywords():
-            if not self._is_valid_search_keyword(direction):
+            if not is_valid_keyword(direction):
                 self._logger.warning("[AUTOMATION] skip invalid direction keyword=%s", direction)
                 continue
 
@@ -157,12 +157,36 @@ class AutoCommenterOrchestrator:
                     self._random_wait(self._cfg.runtime.action_wait_seconds, "after comment")
 
     def _process_post(self, keyword: str, post: Post) -> bool:
-        self._logger.info("[AUTOMATION] fetch post context post_id=%s", post.post_id)
+        self._logger.info("[AUTOMATION] fetch post context post_id=%s title=%s url=%s", post.post_id, post.title, post.url)
         try:
             context = self._browser.fetch_post_context(post)
         except Exception as exc:  # noqa: BLE001
             self._logger.warning("[AUTOMATION] fetch post context failed post_id=%s error=%s", post.post_id, exc)
             return False
+
+        # After opening the post, try to get the real post_id from the current URL
+        # This fixes the kscard: ID instability problem
+        try:
+            real_url = self._browser.get_current_url()
+            real_id = self._browser.extract_post_id_from_url(real_url)
+            if real_id and real_id != post.post_id:
+                self._logger.info(
+                    "[AUTOMATION] resolved real post_id=%s from url=%s (was %s)",
+                    real_id, real_url, post.post_id,
+                )
+                post = Post(post_id=real_id, title=post.title, url=real_url)
+                if self._should_skip_post(post):
+                    self._logger.info("[AUTOMATION] skip dedup (real id) post_id=%s", post.post_id)
+                    return False
+        except Exception:
+            pass
+
+        self._logger.debug(
+            "[AUTOMATION] post context post_id=%s content_summary=%s hot_comments=%s",
+            post.post_id,
+            context.content_summary[:120] if context.content_summary else "",
+            context.hot_comments_summary[:120] if context.hot_comments_summary else "",
+        )
 
         self._logger.info("[AI] commentability check post_id=%s", post.post_id)
         commentable, reason = self._comment_engine.is_commentable(
@@ -186,6 +210,7 @@ class AutoCommenterOrchestrator:
             hot_comments_summary=context.hot_comments_summary,
             requirements=self._cfg.comment_rules.requirements,
         )
+        self._logger.debug("[AI] generated candidates post_id=%s candidates=%s", post.post_id, candidates)
 
         chosen = self._comment_engine.pick_valid_comment(
             candidates=candidates,
@@ -252,28 +277,9 @@ class AutoCommenterOrchestrator:
             self._logger.warning("[AI] no expanded keywords for direction=%s", direction)
             return []
 
-        unique_words: List[str] = []
-        seen_normalized: Set[str] = set()
-        used_normalized = {
-            self._normalize_keyword(w)
-            for w in used_keywords
-            if self._normalize_keyword(w)
-        }
-
-        for raw_word in words:
-            normalized_word = self._normalize_keyword(raw_word)
-            if not normalized_word:
-                continue
-            if normalized_word in seen_normalized or normalized_word in used_normalized:
-                continue
-
-            seen_normalized.add(normalized_word)
-            unique_words.append(normalized_word)
-            if len(unique_words) >= self._cfg.ai.keyword_max_count:
-                break
-
-        self._logger.info("[AI] expanded keywords direction=%s -> %s", direction, unique_words)
-        return unique_words
+        result = words[: self._cfg.ai.keyword_max_count]
+        self._logger.info("[AI] expanded keywords direction=%s -> %s", direction, result)
+        return result
 
     def _should_skip_post(self, post: Post) -> bool:
         title_hash = short_hash(post.title)
@@ -288,30 +294,16 @@ class AutoCommenterOrchestrator:
 
     def _unique_direction_keywords(self) -> List[str]:
         unique_directions: List[str] = []
-        seen: Set[str] = set()
+        seen: set[str] = set()
 
         for raw_direction in self._cfg.topics.direction_keywords:
-            normalized = self._normalize_keyword(raw_direction)
+            normalized = normalize_spaces(raw_direction)
             if not normalized or normalized in seen:
                 continue
             seen.add(normalized)
             unique_directions.append(normalized)
 
         return unique_directions
-
-    @staticmethod
-    def _normalize_keyword(text: str) -> str:
-        return " ".join((text or "").strip().split())
-
-    @staticmethod
-    def _is_valid_search_keyword(text: str) -> bool:
-        if not text:
-            return False
-        if len(text) < 2 or len(text) > 16:
-            return False
-        if any(mark in text for mark in ["，", "。", "！", "？", "；", ",", ".", "!", "?", "#", "\n"]):
-            return False
-        return True
 
     def _ensure_ai_ready(self) -> None:
         if not self._cfg.ai.enabled:

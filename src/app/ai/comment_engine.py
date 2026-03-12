@@ -53,19 +53,25 @@ class CommentEngine:
         for candidate in candidates:
             text = normalize_spaces(candidate)
             if not text or text in seen:
+                self._logger.debug("[AI] candidate skip empty/dup text=%.50s", candidate)
                 continue
             seen.add(text)
 
             if len(text) < min_length or len(text) > max_length:
+                self._logger.debug("[AI] candidate skip length=%s (min=%s max=%s) text=%.50s", len(text), min_length, max_length, text)
                 continue
 
             lowered = text.lower()
-            if any(word and word in lowered for word in banned):
+            hit_word = next((word for word in banned if word and word in lowered), None)
+            if hit_word:
+                self._logger.debug("[AI] candidate skip banned_word=%s text=%.50s", hit_word, text)
                 continue
 
             if is_repeated(text):
+                self._logger.debug("[AI] candidate skip repeated text=%.50s", text)
                 continue
 
+            self._logger.debug("[AI] candidate accepted text=%.80s", text)
             return text
 
         return None
@@ -83,12 +89,14 @@ class CommentEngine:
         )
 
         raw = self._ai.chat(system_prompt=system_prompt, user_prompt=user_prompt, temperature=0.2, max_tokens=180)
+        self._logger.debug("[AI] judge raw response=%.300s", raw)
         parsed = safe_json_loads(raw)
         if not isinstance(parsed, dict):
             raise RuntimeError("commentability json parse failed")
 
         commentable = bool(parsed.get("commentable"))
         reason = normalize_spaces(str(parsed.get("reason") or "")) or "ai no reason"
+        self._logger.debug("[AI] judge result commentable=%s reason=%s", commentable, reason)
         return commentable, reason
 
     def _judge_by_rules(self, post_summary: str) -> Tuple[bool, str]:
@@ -112,8 +120,10 @@ class CommentEngine:
         )
 
         raw = self._ai.chat(system_prompt=system_prompt, user_prompt=user_prompt, temperature=0.8, max_tokens=260)
+        self._logger.debug("[AI] generate raw response=%.300s", raw)
         parsed = safe_json_loads(raw)
         comments = to_clean_string_list(parsed, self._candidate_count)
+        self._logger.debug("[AI] generate parsed comments=%s", comments)
         if not comments:
             raise RuntimeError("empty ai comments")
         return comments

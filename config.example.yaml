@@ -10,14 +10,19 @@ openai:
   timeout_seconds: 45
 
 browser:
-  ws_url: "ws://127.0.0.1:18792/cdp"
-  headless: true
+  # 模式 A（默认）：不填 ws_url，由 Playwright 直接启动 Chromium，登录态持久化于 user_data_dir
+  # 模式 B（可选）：填入 Chrome 远程调试地址，需用 --remote-debugging-port=9222 启动 Chrome
+  #   示例：ws_url: "ws://127.0.0.1:9222"  或  ws_url: "http://127.0.0.1:9222"
+  ws_url: null
+  headless: false
   search_each_post: false
   executable_path: null
   user_data_dir: "./data/browser"
   navigation_timeout_ms: 45000
   action_timeout_ms: 18000
   post_load_wait_ms: 1200
+  auto_launch_chrome: true      # 自动拉起 Chrome（默认开启，仅 ws_url 模式生效）
+  remote_debugging_port: 9222   # 与 ws_url 端口一致
 
 selectors:
   kuaishou_selector_file: "./config/selectors/kuaishou.yaml"

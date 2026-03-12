@@ -4,7 +4,7 @@ import logging
 from typing import List
 
 from .openai_client import OpenAIChatClient
-from ..utils.text import normalize_spaces, safe_json_loads, to_clean_string_list
+from ..utils.text import is_valid_keyword, normalize_spaces, safe_json_loads, to_clean_string_list
 
 
 SYNONYM_MAP = {
@@ -65,7 +65,7 @@ class KeywordExpander:
             text = normalize_spaces(word)
             if not text or text in seen or text in used:
                 continue
-            if not self._looks_like_keyword(text):
+            if not is_valid_keyword(text):
                 continue
             seen.add(text)
             cleaned.append(text)
@@ -76,18 +76,6 @@ class KeywordExpander:
             return cleaned
 
         raise RuntimeError("no valid new keyword after filtering")
-
-    @staticmethod
-    def _looks_like_keyword(text: str) -> bool:
-        if not text:
-            return False
-        if len(text) < 2 or len(text) > 16:
-            return False
-        if any(mark in text for mark in ["，", "。", "！", "？", "；", ",", ".", "!", "?", "#", "\n"]):
-            return False
-        if text.count(" ") > 1:
-            return False
-        return True
 
     def _expand_by_rules(self, direction: str, used: set[str]) -> List[str]:
         suffixes = ["推荐", "热门", "合集", "日常", "实拍", "同款", "高质量", "最新", "精选"]

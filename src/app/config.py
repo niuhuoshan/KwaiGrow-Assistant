@@ -26,6 +26,8 @@ class BrowserConfig(BaseModel):
     action_timeout_ms: int = 18000
     post_load_wait_ms: int = 1200
     search_each_post: bool = False
+    auto_launch_chrome: bool = True
+    remote_debugging_port: int = 9222
 
 
 class SelectorConfig(BaseModel):

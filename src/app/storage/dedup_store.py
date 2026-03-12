@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import sqlite3
 from datetime import datetime
 from pathlib import Path
@@ -13,6 +14,7 @@ from ..schema import CommentRecord
 class DedupStore:
     def __init__(self, cfg: DedupConfig):
         self._cfg = cfg
+        self._logger = logging.getLogger(self.__class__.__name__)
         db_path = Path(cfg.sqlite_path)
         db_path.parent.mkdir(parents=True, exist_ok=True)
         self._conn = sqlite3.connect(db_path)
@@ -65,17 +67,20 @@ class DedupStore:
         if self._cfg.by_post_id and post_id:
             row = cur.execute("SELECT 1 FROM comments WHERE post_id = ? LIMIT 1", (post_id,)).fetchone()
             if row:
+                self._logger.debug("[DEDUP] hit by_post_id post_id=%s", post_id)
                 return True
 
         if self._cfg.by_url and url:
             row = cur.execute("SELECT 1 FROM comments WHERE url = ? LIMIT 1", (url,)).fetchone()
             if row:
+                self._logger.debug("[DEDUP] hit by_url url=%s", url)
                 return True
 
         is_card_post = (post_id or "").startswith("kscard:")
         if self._cfg.by_title_hash and title_hash and (not is_card_post):
             row = cur.execute("SELECT 1 FROM comments WHERE title_hash = ? LIMIT 1", (title_hash,)).fetchone()
             if row:
+                self._logger.debug("[DEDUP] hit by_title_hash title_hash=%s", title_hash)
                 return True
 
         return False
