@@ -11,7 +11,7 @@ import subprocess
 import sys
 import time
 import traceback
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -42,17 +42,24 @@ HTML = """
   <title>KS Auto Commenter 控制台</title>
   <style>
     :root {
-      --bg: #0b1220;
-      --panel: #111b30;
-      --panel-soft: #1a2742;
-      --line: #2c3f62;
-      --text: #e9eefc;
-      --muted: #9caed0;
-      --ok: #22c55e;
-      --warn: #f59e0b;
-      --danger: #ef4444;
-      --accent: #60a5fa;
+      --bg: #06111f;
+      --bg-deep: #030712;
+      --panel: rgba(10, 21, 39, 0.78);
+      --panel-soft: rgba(20, 36, 63, 0.82);
+      --panel-strong: rgba(7, 18, 34, 0.92);
+      --line: rgba(132, 166, 218, 0.18);
+      --line-strong: rgba(132, 166, 218, 0.34);
+      --text: #e8f0ff;
+      --muted: #90a6cb;
+      --ok: #33d69f;
+      --warn: #f7b84b;
+      --danger: #ff6b7a;
+      --accent: #69c8ff;
+      --accent-strong: #40a5ff;
+      --accent-lime: #9df76f;
+      --accent-blue: #8ea5ff;
       --info: #38bdf8;
+      --shadow: 0 28px 70px rgba(0, 0, 0, 0.28);
       color-scheme: dark;
     }
 
@@ -65,58 +72,143 @@ HTML = """
     }
 
     body {
+      position: relative;
+      min-height: 100vh;
       margin: 0;
-      padding: clamp(10px, 1.6vw, 20px);
+      padding: clamp(12px, 1.8vw, 24px);
       color: var(--text);
-      font-family: Inter, -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
-      background: radial-gradient(1200px 700px at 10% -10%, #1e3a8a 0%, transparent 42%),
-                  radial-gradient(1200px 700px at 100% -15%, #3b0764 0%, transparent 38%),
-                  var(--bg);
+      font-family: "IBM Plex Sans", "Segoe UI Variable", "PingFang SC", "Microsoft YaHei", sans-serif;
+      background:
+        radial-gradient(1100px 780px at 0% 0%, rgba(56, 189, 248, 0.18), transparent 48%),
+        radial-gradient(1200px 840px at 100% 0%, rgba(64, 165, 255, 0.18), transparent 52%),
+        radial-gradient(900px 720px at 50% 120%, rgba(157, 247, 111, 0.10), transparent 55%),
+        linear-gradient(180deg, #07111f 0%, #02060d 100%);
+    }
+
+    body::before {
+      content: '';
+      position: fixed;
+      inset: -20%;
+      background:
+        radial-gradient(circle at 18% 18%, rgba(105, 200, 255, 0.14), transparent 26%),
+        radial-gradient(circle at 80% 12%, rgba(142, 165, 255, 0.12), transparent 24%),
+        radial-gradient(circle at 60% 82%, rgba(157, 247, 111, 0.08), transparent 20%);
+      filter: blur(44px);
+      pointer-events: none;
+      animation: auroraDrift 18s ease-in-out infinite alternate;
+      z-index: 0;
+    }
+
+    body::after {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background-image:
+        linear-gradient(rgba(105, 200, 255, 0.07) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(105, 200, 255, 0.06) 1px, transparent 1px);
+      background-size: 120px 120px;
+      mask-image: linear-gradient(180deg, rgba(255,255,255,0.35), transparent 92%);
+      opacity: 0.25;
+      pointer-events: none;
+      animation: gridShift 26s linear infinite;
+      z-index: 0;
+    }
+
+    .sprite-defs {
+      position: absolute;
+      width: 0;
+      height: 0;
+      overflow: hidden;
+      pointer-events: none;
     }
 
     .wrap {
-      width: min(100%, 1280px);
+      position: relative;
+      z-index: 1;
+      width: min(100%, 1380px);
       margin: 0 auto;
       display: grid;
-      gap: 12px;
+      gap: 14px;
       min-width: 0;
       overflow-x: visible;
+      animation: sceneIn .75s ease both;
     }
 
     .card {
+      position: relative;
       border: 1px solid var(--line);
-      border-radius: 12px;
-      background: linear-gradient(180deg, rgba(255,255,255,0.03), rgba(255,255,255,0.01));
+      border-radius: 20px;
+      background: linear-gradient(180deg, rgba(11, 23, 41, 0.92), rgba(6, 13, 24, 0.94));
+      box-shadow: var(--shadow);
+      backdrop-filter: blur(18px);
       overflow: hidden;
       min-width: 0;
+      transition: transform .28s ease, border-color .28s ease, box-shadow .28s ease;
+    }
+
+    .card::before {
+      content: '';
+      position: absolute;
+      inset: 0 0 auto 0;
+      height: 1px;
+      background: linear-gradient(90deg, transparent, rgba(141, 224, 255, 0.55), transparent);
+      opacity: 0.72;
+      pointer-events: none;
+    }
+
+    .card:hover {
+      transform: translateY(-2px);
+      border-color: rgba(132, 166, 218, 0.28);
     }
 
     .topbar {
-      padding: 14px 16px;
+      padding: 22px;
       display: grid;
-      grid-template-columns: minmax(0, 1fr) auto;
+      grid-template-columns: minmax(0, 1.45fr) minmax(300px, .95fr);
       align-items: start;
-      gap: 10px;
+      gap: 18px;
+      border-color: rgba(56, 189, 248, 0.24);
+      background: linear-gradient(135deg, rgba(12, 27, 48, 0.96), rgba(5, 13, 24, 0.92));
+    }
+
+    .topbar::after {
+      content: '';
+      position: absolute;
+      width: 300px;
+      height: 300px;
+      right: -90px;
+      top: -140px;
+      border-radius: 50%;
+      background: radial-gradient(circle, rgba(105, 200, 255, 0.17), transparent 62%);
+      filter: blur(10px);
+      animation: floatOrb 15s ease-in-out infinite;
+      pointer-events: none;
     }
 
     .topbar-left {
       min-width: 0;
+      display: grid;
+      gap: 14px;
     }
 
     .topbar-right {
-      display: flex;
-      gap: 8px;
-      align-items: center;
-      flex-wrap: wrap;
-      justify-content: flex-start;
+      display: grid;
+      gap: 10px;
+      align-content: start;
       min-width: 0;
     }
 
     .title-row {
       display: flex;
       align-items: center;
-      gap: 10px;
+      gap: 14px;
       flex-wrap: wrap;
+      min-width: 0;
+    }
+
+    .title-copy {
+      display: grid;
+      gap: 6px;
       min-width: 0;
     }
 
@@ -126,8 +218,18 @@ HTML = """
       overflow-wrap: anywhere;
     }
 
-    h1 { margin: 0; font-size: clamp(18px, 2vw, 22px); }
-    .muted { color: var(--muted); font-size: 12px; }
+    h1 {
+      margin: 0;
+      font-size: clamp(28px, 3vw, 40px);
+      line-height: 1;
+      letter-spacing: .01em;
+    }
+
+    .muted {
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.55;
+    }
 
     .pill {
       display: inline-flex;
@@ -135,61 +237,74 @@ HTML = """
       gap: 8px;
       border: 1px solid var(--line);
       border-radius: 999px;
-      padding: 6px 10px;
+      padding: 8px 12px;
       font-size: 12px;
       font-variant-numeric: tabular-nums;
       background: rgba(255,255,255,0.03);
+      min-height: 40px;
+      box-shadow: inset 0 1px 0 rgba(255,255,255,0.04);
     }
 
     .dot {
-      width: 8px;
-      height: 8px;
+      width: 10px;
+      height: 10px;
       border-radius: 50%;
       background: var(--warn);
+      box-shadow: 0 0 18px rgba(247, 184, 75, 0.5);
     }
-    .dot.ok { background: var(--ok); }
+    .dot.ok {
+      background: var(--ok);
+      box-shadow: 0 0 18px rgba(51, 214, 159, 0.6);
+    }
 
     .alert-banner {
-      border-radius: 12px;
+      border-radius: 20px;
       border: 1px solid var(--line);
-      padding: 12px 14px;
-      display: grid;
-      gap: 4px;
+      padding: 16px 18px;
+      display: block;
+      backdrop-filter: blur(18px);
     }
 
     .alert-info { background: rgba(56,189,248,0.09); border-color: rgba(56,189,248,0.4); }
-    .alert-warn { background: rgba(245,158,11,0.10); border-color: rgba(245,158,11,0.45); }
-    .alert-error { background: rgba(239,68,68,0.11); border-color: rgba(239,68,68,0.5); }
+    .alert-warn { background: rgba(245,158,11,0.12); border-color: rgba(245,158,11,0.42); }
+    .alert-error { background: rgba(255,107,122,0.12); border-color: rgba(255,107,122,0.42); }
 
     .alert-title {
-      font-size: clamp(16px, 2.1vw, 22px);
+      font-size: clamp(16px, 2vw, 24px);
       font-weight: 800;
-      letter-spacing: .2px;
+      letter-spacing: .02em;
     }
 
     .stats {
       display: grid;
-      gap: 10px;
-      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 14px;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
     }
 
     .stat {
-      min-height: 90px;
+      min-height: 164px;
       min-width: 0;
-      padding: 12px;
+      padding: 16px;
       display: flex;
       flex-direction: column;
       justify-content: space-between;
+      gap: 16px;
+      background: linear-gradient(180deg, rgba(16, 29, 49, 0.94), rgba(7, 15, 27, 0.94));
     }
 
-    .stat .k { color: var(--muted); font-size: 12px; }
+    .stat .k {
+      color: var(--muted);
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: .08em;
+    }
     .stat .v {
-      font-size: clamp(18px, 2.2vw, 28px);
+      font-size: clamp(24px, 2.8vw, 36px);
       font-weight: 800;
       font-variant-numeric: tabular-nums;
       overflow-wrap: anywhere;
       word-break: break-word;
-      line-height: 1.15;
+      line-height: 1.05;
     }
 
     .layout {
@@ -207,7 +322,7 @@ HTML = """
 
     .section-title {
       margin: 0;
-      padding: 12px 14px;
+      padding: 15px 18px;
       border-bottom: 1px solid var(--line);
       background: rgba(255,255,255,0.02);
       font-size: 14px;
@@ -215,34 +330,37 @@ HTML = """
     }
 
     .panel-body {
-      padding: 12px 14px;
+      padding: 16px 18px;
       min-width: 0;
     }
 
     label {
       display: block;
-      margin: 10px 0 4px;
+      margin: 12px 0 6px;
       font-size: 13px;
       font-weight: 600;
+      color: #d6e6ff;
     }
 
     input[type=text], input[type=number], textarea {
       width: 100%;
-      border: 1px solid var(--line);
-      border-radius: 8px;
-      padding: 8px 10px;
+      border: 1px solid rgba(132, 166, 218, 0.2);
+      border-radius: 12px;
+      padding: 10px 12px;
       color: var(--text);
-      background: var(--panel-soft);
+      background: linear-gradient(180deg, rgba(17, 32, 57, 0.98), rgba(12, 25, 43, 0.96));
       outline: none;
       max-width: 100%;
+      transition: border-color .2s ease, box-shadow .2s ease, transform .2s ease;
     }
 
     input[type=text]:focus, input[type=number]:focus, textarea:focus {
       border-color: var(--accent);
-      box-shadow: 0 0 0 2px rgba(96,165,250,0.2);
+      box-shadow: 0 0 0 4px rgba(64,165,255,0.14);
+      transform: translateY(-1px);
     }
 
-    textarea { min-height: 84px; resize: vertical; }
+    textarea { min-height: 96px; resize: vertical; }
 
     .check {
       display: flex;
@@ -252,23 +370,38 @@ HTML = """
       font-size: 13px;
     }
 
-    .buttons { display: flex; gap: 8px; margin-top: 12px; flex-wrap: wrap; }
+    .buttons { display: flex; gap: 10px; margin-top: 14px; flex-wrap: wrap; }
 
     button, .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
       border: 1px solid var(--line);
-      border-radius: 8px;
-      padding: 8px 12px;
-      background: linear-gradient(180deg, #1f3b75, #1a3263);
+      border-radius: 12px;
+      padding: 10px 14px;
+      background: linear-gradient(180deg, rgba(29, 64, 175, 0.95), rgba(29, 78, 216, 0.92));
       color: var(--text);
       cursor: pointer;
       text-decoration: none;
       font-size: 13px;
+      font-weight: 600;
       white-space: nowrap;
       max-width: 100%;
+      transition: transform .2s ease, filter .2s ease, border-color .2s ease, box-shadow .2s ease;
+      box-shadow: inset 0 1px 0 rgba(255,255,255,0.08);
     }
 
-    .btn.secondary { background: rgba(255,255,255,0.03); }
-    button:hover, .btn:hover { filter: brightness(1.08); }
+    .btn.secondary {
+      background: linear-gradient(180deg, rgba(255,255,255,0.06), rgba(255,255,255,0.03));
+    }
+
+    button:hover, .btn:hover {
+      filter: brightness(1.05);
+      transform: translateY(-1px);
+      border-color: rgba(132, 166, 218, 0.32);
+      box-shadow: 0 14px 30px rgba(0,0,0,0.18);
+    }
 
     .hidden { display: none !important; }
 
@@ -281,10 +414,10 @@ HTML = """
 
     .settings-close {
       border: 1px solid var(--line);
-      border-radius: 8px;
-      background: rgba(255,255,255,0.03);
+      border-radius: 12px;
+      background: rgba(255,255,255,0.04);
       color: var(--text);
-      padding: 5px 10px;
+      padding: 8px 12px;
       cursor: pointer;
       font-size: 12px;
     }
@@ -292,21 +425,22 @@ HTML = """
     .test-log {
       margin: 8px 0 0;
       border: 1px solid var(--line);
-      border-radius: 8px;
-      padding: 10px;
+      border-radius: 16px;
+      padding: 12px 14px;
       min-height: 54px;
       max-height: 220px;
       overflow: auto;
-      background: #0a1224;
+      background: linear-gradient(180deg, rgba(6, 16, 30, 0.98), rgba(8, 18, 36, 0.96));
       color: #d6e4ff;
       font-size: 12px;
       line-height: 1.45;
       white-space: pre-wrap;
       word-break: break-word;
+      font-family: "IBM Plex Mono", "Cascadia Code", "JetBrains Mono", Consolas, monospace;
     }
 
     .switch-row {
-      margin: 10px 0 4px;
+      margin: 12px 0 4px;
       display: grid;
       grid-template-columns: minmax(0, 1fr) auto;
       align-items: start;
@@ -340,7 +474,7 @@ HTML = """
       position: absolute;
       inset: 0;
       border-radius: 999px;
-      background: #36455f;
+      background: rgba(66, 86, 117, 0.9);
       transition: .2s;
       cursor: pointer;
       border: 1px solid rgba(255,255,255,0.18);
@@ -359,7 +493,7 @@ HTML = """
     }
 
     .switch-input:checked + .switch-slider {
-      background: #2563eb;
+      background: linear-gradient(90deg, rgba(56,189,248,0.95), rgba(64,165,255,0.88));
       border-color: rgba(96,165,250,0.8);
     }
 
@@ -369,7 +503,15 @@ HTML = """
 
     .control-panel .panel-body {
       display: grid;
-      gap: 10px;
+      gap: 14px;
+    }
+
+    .control-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+      flex-wrap: wrap;
     }
 
     .control-buttons {
@@ -382,24 +524,24 @@ HTML = """
     .control-inline-form { margin: 0; }
 
     .control-btn {
-      border-radius: 10px;
-      padding: 10px 18px;
+      border-radius: 14px;
+      padding: 12px 18px;
       font-size: 15px;
       font-weight: 700;
       border: 1px solid var(--line);
       color: var(--text);
-      background: linear-gradient(180deg, #1e40af, #1d4ed8);
+      background: linear-gradient(180deg, rgba(29, 78, 216, 0.98), rgba(30, 64, 175, 0.92));
     }
 
     .control-btn.stop {
-      background: linear-gradient(180deg, #b91c1c, #dc2626);
-      border-color: rgba(239,68,68,0.7);
+      background: linear-gradient(180deg, rgba(224, 71, 94, 0.95), rgba(185, 28, 28, 0.92));
+      border-color: rgba(255,107,122,0.54);
     }
 
     .tables {
       display: grid;
-      gap: 12px;
-      grid-template-columns: 1fr;
+      gap: 14px;
+      grid-template-columns: minmax(0, 1.2fr) minmax(0, .9fr);
       width: 100%;
       min-width: 0;
     }
@@ -412,6 +554,7 @@ HTML = """
       overflow-y: auto;
       width: 100%;
       min-width: 0;
+      scrollbar-color: rgba(105, 200, 255, 0.4) transparent;
     }
 
     table {
@@ -431,7 +574,7 @@ HTML = """
       padding: 8px 6px;
       position: sticky;
       top: 0;
-      background: #131f37;
+      background: rgba(12, 25, 43, 0.96);
       z-index: 2;
     }
 
@@ -445,16 +588,25 @@ HTML = """
       overflow-wrap: anywhere;
     }
 
+    tbody tr {
+      transition: background-color .18s ease;
+    }
+
+    tbody tr:hover {
+      background: rgba(105, 200, 255, 0.05);
+    }
+
     .log-card { margin-top: 12px; }
     pre {
       margin: 0;
-      padding: 12px;
+      padding: 14px 16px;
       max-height: 420px;
       overflow: auto;
-      background: #0a1224;
+      background: linear-gradient(180deg, rgba(6, 16, 30, 0.98), rgba(8, 18, 36, 0.96));
       color: #d6e4ff;
       font-size: 12px;
       line-height: 1.45;
+      font-family: "IBM Plex Mono", "Cascadia Code", "JetBrains Mono", Consolas, monospace;
     }
 
     .row-inline {
@@ -471,13 +623,794 @@ HTML = """
     .txt-warn { color: var(--warn); }
     .txt-danger { color: var(--danger); }
 
+    .glyph {
+      width: 18px;
+      height: 18px;
+      display: block;
+      fill: none;
+      stroke: currentColor;
+      stroke-width: 1.8;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+      flex: 0 0 auto;
+    }
+
+    .icon-shell {
+      width: 42px;
+      height: 42px;
+      border-radius: 14px;
+      display: inline-grid;
+      place-items: center;
+      background: linear-gradient(180deg, rgba(255,255,255,0.08), rgba(255,255,255,0.02));
+      border: 1px solid rgba(255,255,255,0.08);
+      box-shadow: inset 0 1px 0 rgba(255,255,255,0.06);
+      color: #d7ecff;
+      flex: 0 0 auto;
+    }
+
+    .icon-shell.small {
+      width: 36px;
+      height: 36px;
+      border-radius: 12px;
+    }
+
+    .accent-cyan {
+      color: #9fe8ff;
+      background: linear-gradient(180deg, rgba(56,189,248,0.22), rgba(8,37,60,0.42));
+    }
+
+    .accent-blue {
+      color: #c6d2ff;
+      background: linear-gradient(180deg, rgba(129,140,248,0.20), rgba(28,37,74,0.42));
+    }
+
+    .accent-lime {
+      color: #d8ffc1;
+      background: linear-gradient(180deg, rgba(163,230,53,0.18), rgba(35,58,20,0.42));
+    }
+
+    .accent-amber {
+      color: #ffe1af;
+      background: linear-gradient(180deg, rgba(245,158,11,0.22), rgba(66,41,12,0.42));
+    }
+
+    .eyebrow {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    .eyebrow-chip,
+    .meta-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      min-height: 34px;
+      padding: 8px 12px;
+      border-radius: 999px;
+      border: 1px solid rgba(132, 166, 218, 0.16);
+      background: rgba(255,255,255,0.03);
+      font-size: 12px;
+      color: #d7eaff;
+    }
+
+    .eyebrow-chip {
+      text-transform: uppercase;
+      letter-spacing: .12em;
+      font-size: 11px;
+    }
+
+    .eyebrow-note {
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .brand-mark {
+      width: 64px;
+      height: 64px;
+      border-radius: 22px;
+      display: grid;
+      place-items: center;
+      color: #b5efff;
+      background:
+        radial-gradient(circle at 30% 30%, rgba(56,189,248,0.28), transparent 42%),
+        linear-gradient(180deg, rgba(18, 41, 71, 0.95), rgba(8, 18, 31, 0.92));
+      border: 1px solid rgba(105, 200, 255, 0.18);
+      box-shadow:
+        inset 0 1px 0 rgba(255,255,255,0.06),
+        0 18px 40px rgba(0,0,0,0.22);
+    }
+
+    .brand-mark .glyph {
+      width: 28px;
+      height: 28px;
+    }
+
+    .topbar-copy {
+      color: #c9daf6;
+      font-size: 14px;
+      line-height: 1.6;
+      max-width: 64ch;
+    }
+
+    .topbar-meta {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      min-width: 0;
+    }
+
+    .pill-live {
+      width: fit-content;
+      border-color: rgba(105, 200, 255, 0.24);
+      background: linear-gradient(180deg, rgba(56,189,248,0.14), rgba(56,189,248,0.05));
+    }
+
+    .hero-telemetry {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 10px;
+    }
+
+    .mini-readout {
+      padding: 12px 14px;
+      border-radius: 16px;
+      border: 1px solid rgba(132, 166, 218, 0.14);
+      background: linear-gradient(180deg, rgba(255,255,255,0.05), rgba(255,255,255,0.02));
+      display: grid;
+      gap: 4px;
+      min-width: 0;
+    }
+
+    .mini-readout span {
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: .12em;
+      color: var(--muted);
+    }
+
+    .mini-readout strong {
+      font-size: 22px;
+      line-height: 1;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .alert-main {
+      display: flex;
+      gap: 14px;
+      align-items: flex-start;
+    }
+
+    .alert-copy {
+      display: grid;
+      gap: 6px;
+      min-width: 0;
+    }
+
+    .alert-topline {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+
+    .alert-badge {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 28px;
+      padding: 4px 10px;
+      border-radius: 999px;
+      border: 1px solid rgba(255,255,255,0.12);
+      background: rgba(255,255,255,0.08);
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: .12em;
+      text-transform: uppercase;
+    }
+
+    .metric-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 12px;
+    }
+
+    .metric-sub,
+    .metric-foot {
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.5;
+    }
+
+    .phase-value {
+      font-size: clamp(18px, 2vw, 24px) !important;
+      line-height: 1.35 !important;
+    }
+
+    .stat-cyan {
+      background:
+        radial-gradient(circle at 100% 0%, rgba(56,189,248,0.16), transparent 36%),
+        linear-gradient(180deg, rgba(16,29,49,0.94), rgba(7,15,27,0.94));
+    }
+
+    .stat-blue {
+      background:
+        radial-gradient(circle at 100% 0%, rgba(129,140,248,0.14), transparent 36%),
+        linear-gradient(180deg, rgba(16,29,49,0.94), rgba(7,15,27,0.94));
+    }
+
+    .stat-lime {
+      background:
+        radial-gradient(circle at 100% 0%, rgba(163,230,53,0.14), transparent 36%),
+        linear-gradient(180deg, rgba(16,29,49,0.94), rgba(7,15,27,0.94));
+    }
+
+    .stat-phase {
+      background:
+        radial-gradient(circle at 100% 0%, rgba(245,158,11,0.16), transparent 38%),
+        linear-gradient(180deg, rgba(16,29,49,0.94), rgba(7,15,27,0.94));
+    }
+
+    .section-title-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 14px;
+      flex-wrap: wrap;
+    }
+
+    .section-title-main {
+      display: inline-flex;
+      align-items: center;
+      gap: 12px;
+      min-width: 0;
+    }
+
+    .section-title-main > span:last-child {
+      display: grid;
+      gap: 2px;
+      min-width: 0;
+    }
+
+    .section-title small {
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 500;
+      letter-spacing: .04em;
+      text-transform: uppercase;
+    }
+
+    .section-tag {
+      display: inline-flex;
+      align-items: center;
+      min-height: 28px;
+      padding: 4px 10px;
+      border-radius: 999px;
+      border: 1px solid rgba(255,255,255,0.08);
+      background: rgba(255,255,255,0.04);
+      color: #d5e9ff;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: .12em;
+      text-transform: uppercase;
+    }
+
+    .flash-msg {
+      padding: 8px 12px;
+      border-radius: 999px;
+      background: rgba(51, 214, 159, 0.12);
+      border: 1px solid rgba(51, 214, 159, 0.18);
+      color: #b8f8df;
+      font-size: 12px;
+      font-weight: 600;
+    }
+
+    .overview-grid {
+      display: grid;
+      grid-template-columns: minmax(0, 1.5fr) minmax(320px, .92fr);
+      gap: 14px;
+      min-width: 0;
+      align-items: start;
+    }
+
+    .chart-grid {
+      display: grid;
+      grid-template-columns: minmax(0, 1.45fr) minmax(260px, .85fr);
+      gap: 14px;
+      align-items: start;
+    }
+
+    .chart-stage,
+    .mini-panel,
+    .signal-body {
+      min-width: 0;
+    }
+
+    .chart-stage {
+      display: grid;
+      gap: 14px;
+      align-content: start;
+    }
+
+    .chart-meta {
+      display: flex;
+      justify-content: space-between;
+      gap: 14px;
+      align-items: flex-start;
+      flex-wrap: wrap;
+    }
+
+    .legend {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    .legend-item {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      min-height: 28px;
+      padding: 4px 10px;
+      border-radius: 999px;
+      background: rgba(255,255,255,0.04);
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+    }
+
+    .legend-item::before {
+      content: '';
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      box-shadow: 0 0 12px currentColor;
+    }
+
+    .legend-item.comments { color: #77e8ff; }
+    .legend-item.comments::before { background: #77e8ff; }
+    .legend-item.keywords { color: #c7ff8a; }
+    .legend-item.keywords::before { background: #c7ff8a; }
+
+    .chart-values {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 10px;
+      width: min(100%, 360px);
+    }
+
+    .chart-value {
+      padding: 12px;
+      border-radius: 14px;
+      border: 1px solid rgba(132, 166, 218, 0.14);
+      background: rgba(255,255,255,0.03);
+      display: grid;
+      gap: 4px;
+      min-width: 0;
+    }
+
+    .chart-value span {
+      color: var(--muted);
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: .08em;
+    }
+
+    .chart-value strong {
+      font-size: 22px;
+      line-height: 1;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .chart-canvas {
+      position: relative;
+      min-height: 250px;
+      border-radius: 20px;
+      overflow: hidden;
+      border: 1px solid rgba(132, 166, 218, 0.16);
+      background:
+        radial-gradient(circle at 20% 20%, rgba(56,189,248,0.08), transparent 32%),
+        linear-gradient(180deg, rgba(8, 18, 33, 0.98), rgba(6, 13, 25, 0.96));
+    }
+
+    .chart-grid-lines {
+      position: absolute;
+      inset: 0;
+      background-image:
+        linear-gradient(rgba(255,255,255,0.05) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255,255,255,0.03) 1px, transparent 1px);
+      background-size: 100% 25%, calc(100% / 12) 100%;
+      opacity: 0.45;
+      pointer-events: none;
+    }
+
+    .chart-svg {
+      position: relative;
+      z-index: 1;
+      width: 100%;
+      height: 250px;
+      display: block;
+    }
+
+    .chart-area.comments { fill: url(#commentsFill); }
+    .chart-area.keywords { fill: url(#keywordsFill); }
+    .chart-line {
+      fill: none;
+      stroke-width: 3;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+      filter: drop-shadow(0 0 12px currentColor);
+    }
+
+    .chart-line.comments { stroke: #77e8ff; color: #77e8ff; }
+    .chart-line.keywords { stroke: #c7ff8a; color: #c7ff8a; }
+
+    .chart-point {
+      stroke: rgba(9,17,31,0.95);
+      stroke-width: 3;
+    }
+
+    .chart-point.comments { fill: #77e8ff; }
+    .chart-point.keywords { fill: #c7ff8a; }
+
+    .axis-row {
+      display: grid;
+      grid-template-columns: repeat(12, minmax(0, 1fr));
+      gap: 8px;
+    }
+
+    .axis-pill {
+      text-align: center;
+      padding: 6px 0;
+      border-radius: 999px;
+      background: rgba(255,255,255,0.03);
+      color: var(--muted);
+      font-size: 11px;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .axis-pill.is-current {
+      color: #e6f6ff;
+      background: rgba(105, 200, 255, 0.14);
+    }
+
+    .chart-side {
+      display: grid;
+      gap: 14px;
+      min-width: 0;
+      align-content: start;
+    }
+
+    .mini-panel {
+      padding: 14px;
+      border-radius: 18px;
+      border: 1px solid rgba(132, 166, 218, 0.14);
+      background: linear-gradient(180deg, rgba(15, 29, 50, 0.86), rgba(8, 16, 29, 0.92));
+      display: grid;
+      gap: 14px;
+    }
+
+    .mini-panel-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+      color: #dff0ff;
+      font-size: 13px;
+      font-weight: 700;
+    }
+
+    .mini-bars {
+      display: grid;
+      grid-template-columns: repeat(12, minmax(0, 1fr));
+      gap: 8px;
+      align-items: end;
+      min-height: 180px;
+    }
+
+    .mini-bar-col {
+      display: grid;
+      gap: 8px;
+      justify-items: center;
+      min-width: 0;
+    }
+
+    .mini-bar-track {
+      position: relative;
+      width: 100%;
+      min-height: 132px;
+      border-radius: 999px;
+      background: linear-gradient(180deg, rgba(255,255,255,0.04), rgba(255,255,255,0.01));
+      overflow: hidden;
+      border: 1px solid rgba(132, 166, 218, 0.12);
+    }
+
+    .mini-bar {
+      position: absolute;
+      inset: auto 0 0 0;
+      height: var(--bar-height, 0%);
+      border-radius: 999px;
+      background: linear-gradient(180deg, rgba(201,255,138,0.95), rgba(125,211,82,0.34));
+      box-shadow: 0 0 22px rgba(163, 230, 53, 0.22);
+      transform-origin: bottom center;
+    }
+
+    .mini-bar-value {
+      font-size: 12px;
+      font-variant-numeric: tabular-nums;
+      color: #edf7ff;
+    }
+
+    .mini-bar-label {
+      font-size: 10px;
+      color: var(--muted);
+      letter-spacing: .06em;
+      text-transform: uppercase;
+    }
+
+    .telemetry-stack {
+      display: grid;
+      gap: 12px;
+    }
+
+    .telemetry-block {
+      display: grid;
+      gap: 6px;
+    }
+
+    .telemetry-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 10px;
+      font-size: 12px;
+      color: #dcecff;
+    }
+
+    .telemetry-row strong {
+      font-variant-numeric: tabular-nums;
+    }
+
+    .telemetry-meter {
+      position: relative;
+      height: 10px;
+      border-radius: 999px;
+      background: rgba(255,255,255,0.05);
+      overflow: hidden;
+      border: 1px solid rgba(132, 166, 218, 0.10);
+    }
+
+    .telemetry-fill {
+      display: block;
+      height: 100%;
+      width: 0%;
+      border-radius: inherit;
+      transition: width .35s ease;
+    }
+
+    .telemetry-fill.error { background: linear-gradient(90deg, rgba(255,107,122,0.95), rgba(255,107,122,0.35)); }
+    .telemetry-fill.warning { background: linear-gradient(90deg, rgba(247,184,75,0.95), rgba(247,184,75,0.35)); }
+    .telemetry-fill.info { background: linear-gradient(90deg, rgba(119,232,255,0.95), rgba(119,232,255,0.35)); }
+
+    .signal-body {
+      display: grid;
+      gap: 16px;
+    }
+
+    .signal-cluster {
+      display: grid;
+      gap: 16px;
+      justify-items: center;
+      text-align: center;
+    }
+
+    .signal-ring {
+      position: relative;
+      width: 172px;
+      aspect-ratio: 1;
+      display: grid;
+      place-items: center;
+      padding: 14px;
+      border-radius: 50%;
+      background: conic-gradient(from 180deg, rgba(56,189,248,0.12), rgba(56,189,248,0.9), rgba(56,189,248,0.12));
+      box-shadow:
+        inset 0 0 22px rgba(56,189,248,0.14),
+        0 0 30px rgba(56,189,248,0.12);
+      animation: ringPulse 4s ease-in-out infinite;
+    }
+
+    .signal-ring::before {
+      content: '';
+      position: absolute;
+      inset: 14px;
+      border-radius: 50%;
+      background:
+        radial-gradient(circle at 32% 28%, rgba(105, 200, 255, 0.18), transparent 34%),
+        linear-gradient(180deg, rgba(6, 18, 33, 0.96), rgba(7, 14, 24, 0.98));
+      border: 1px solid rgba(132, 166, 218, 0.16);
+    }
+
+    .signal-ring[data-level="warn"] {
+      background: conic-gradient(from 180deg, rgba(245,158,11,0.10), rgba(245,158,11,0.88), rgba(245,158,11,0.10));
+      box-shadow:
+        inset 0 0 22px rgba(245,158,11,0.16),
+        0 0 30px rgba(245,158,11,0.12);
+    }
+
+    .signal-ring[data-level="error"] {
+      background: conic-gradient(from 180deg, rgba(255,107,122,0.10), rgba(255,107,122,0.90), rgba(255,107,122,0.10));
+      box-shadow:
+        inset 0 0 22px rgba(255,107,122,0.16),
+        0 0 30px rgba(255,107,122,0.12);
+    }
+
+    .signal-ring-core {
+      position: relative;
+      z-index: 1;
+      display: grid;
+      gap: 6px;
+      justify-items: center;
+      text-align: center;
+    }
+
+    #signalTone {
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: .18em;
+      text-transform: uppercase;
+      color: #9fd8ff;
+    }
+
+    #signalPhase {
+      max-width: 120px;
+      font-size: 20px;
+      line-height: 1.25;
+    }
+
+    .signal-summary {
+      display: grid;
+      gap: 8px;
+      width: 100%;
+    }
+
+    .signal-label {
+      font-size: 11px;
+      letter-spacing: .12em;
+      text-transform: uppercase;
+      color: var(--muted);
+    }
+
+    .signal-message {
+      font-size: 15px;
+      line-height: 1.55;
+      color: #e5f2ff;
+    }
+
+    .signal-feed {
+      display: grid;
+      gap: 10px;
+    }
+
+    .feed-item {
+      padding: 12px 14px;
+      border-radius: 16px;
+      border: 1px solid rgba(132, 166, 218, 0.14);
+      background: rgba(255,255,255,0.03);
+      display: grid;
+      gap: 6px;
+      min-width: 0;
+    }
+
+    .feed-label {
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: .12em;
+      text-transform: uppercase;
+      color: var(--muted);
+    }
+
+    .feed-value {
+      font-size: 12px;
+      line-height: 1.55;
+      color: #dcecff;
+      word-break: break-word;
+    }
+
+    .signal-footer {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px;
+    }
+
+    .signal-pill {
+      padding: 12px 14px;
+      border-radius: 16px;
+      border: 1px solid rgba(132, 166, 218, 0.14);
+      background: rgba(255,255,255,0.03);
+      display: grid;
+      gap: 4px;
+      min-width: 0;
+    }
+
+    .signal-pill-label {
+      font-size: 11px;
+      letter-spacing: .12em;
+      text-transform: uppercase;
+      color: var(--muted);
+    }
+
+    .signal-pill strong {
+      font-size: 18px;
+      font-variant-numeric: tabular-nums;
+    }
+
+    body[data-state="running"] .dot.ok {
+      animation: pulseDot 1.8s ease-in-out infinite;
+    }
+
+    .hero-card,
+    .chart-card,
+    .signal-card,
+    .table-card,
+    .log-card {
+      overflow: hidden;
+    }
+
+    .signal-card {
+      align-self: start;
+    }
+
+    @keyframes sceneIn {
+      from {
+        opacity: 0;
+        transform: translateY(8px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    @keyframes auroraDrift {
+      from { transform: translate3d(-2%, -1%, 0) scale(1); }
+      to { transform: translate3d(2%, 1%, 0) scale(1.05); }
+    }
+
+    @keyframes gridShift {
+      from { transform: translate3d(0, 0, 0); }
+      to { transform: translate3d(0, 120px, 0); }
+    }
+
+    @keyframes floatOrb {
+      0%, 100% { transform: translate3d(0, 0, 0) scale(1); }
+      50% { transform: translate3d(-14px, 16px, 0) scale(1.06); }
+    }
+
+    @keyframes pulseDot {
+      0%, 100% { transform: scale(1); opacity: 1; }
+      50% { transform: scale(1.24); opacity: .78; }
+    }
+
+    @keyframes ringPulse {
+      0%, 100% { transform: scale(1); }
+      50% { transform: scale(1.02); }
+    }
+
     @media (max-width: 1360px) {
-      .stats { grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); }
+      .stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .overview-grid { grid-template-columns: 1fr; }
+      .chart-grid { grid-template-columns: 1fr; }
       .tables { grid-template-columns: 1fr; }
     }
 
     @media (max-width: 980px) {
       .topbar { grid-template-columns: 1fr; }
+      .chart-values { width: 100%; }
+      .hero-telemetry { grid-template-columns: repeat(3, minmax(0, 1fr)); }
       .topbar-right { justify-content: flex-start; }
     }
 
@@ -485,71 +1418,399 @@ HTML = """
       .stats { grid-template-columns: 1fr; }
       body { padding: 10px; }
       .tables { grid-template-columns: 1fr; }
+      .hero-telemetry,
+      .signal-footer,
+      .chart-values { grid-template-columns: 1fr; }
+      .mini-bars,
+      .axis-row { gap: 6px; }
+      .brand-mark { width: 56px; height: 56px; }
+      .chart-canvas,
+      .chart-svg { min-height: 220px; height: 220px; }
       .control-buttons, .buttons { flex-direction: column; align-items: stretch; }
       .control-inline-form { width: 100%; }
       .control-btn, .btn { width: 100%; }
       button, .btn { white-space: normal; }
     }
+
+    @media (prefers-reduced-motion: reduce) {
+      *,
+      *::before,
+      *::after {
+        animation: none !important;
+        transition: none !important;
+        scroll-behavior: auto !important;
+      }
+    }
   </style>
 </head>
-<body>
+<body data-state="{{ 'running' if run_status == '运行中' else 'idle' }}">
+  <svg class="sprite-defs" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false">
+    <symbol id="i-orbit" viewBox="0 0 24 24">
+      <circle cx="12" cy="12" r="2.2"></circle>
+      <ellipse cx="12" cy="12" rx="8.5" ry="4.25"></ellipse>
+      <path d="M12 3.25c3.55 0 6.5 3.92 6.5 8.75S15.55 20.75 12 20.75 5.5 16.83 5.5 12 8.45 3.25 12 3.25Z"></path>
+    </symbol>
+    <symbol id="i-folder" viewBox="0 0 24 24">
+      <path d="M3.5 7.5h6l1.8 2h9.2v7.8a2.2 2.2 0 0 1-2.2 2.2H5.7a2.2 2.2 0 0 1-2.2-2.2V7.5Z"></path>
+      <path d="M3.5 9.5h17"></path>
+    </symbol>
+    <symbol id="i-wave" viewBox="0 0 24 24">
+      <path d="M3.5 12h2.8l2.1-4.5 3.2 9 2.8-6 2.1 3.5h4"></path>
+    </symbol>
+    <symbol id="i-refresh" viewBox="0 0 24 24">
+      <path d="M20 11a8 8 0 0 0-14-4.8"></path>
+      <path d="M4 5.5v4h4"></path>
+      <path d="M4 13a8 8 0 0 0 14 4.8"></path>
+      <path d="M20 18.5v-4h-4"></path>
+    </symbol>
+    <symbol id="i-settings" viewBox="0 0 24 24">
+      <circle cx="12" cy="12" r="3"></circle>
+      <path d="M19 12a7 7 0 0 0-.08-1l2.03-1.58-2-3.46-2.44.83a7.1 7.1 0 0 0-1.72-1l-.42-2.53h-4l-.42 2.53a7.1 7.1 0 0 0-1.72 1l-2.44-.83-2 3.46L5.08 11a7 7 0 0 0 0 2l-2.03 1.58 2 3.46 2.44-.83a7.1 7.1 0 0 0 1.72 1l.42 2.53h4l.42-2.53a7.1 7.1 0 0 0 1.72-1l2.44.83 2-3.46L18.92 13c.05-.33.08-.66.08-1Z"></path>
+    </symbol>
+    <symbol id="i-play" viewBox="0 0 24 24">
+      <path d="M8 6.5v11l9-5.5Z"></path>
+    </symbol>
+    <symbol id="i-repeat" viewBox="0 0 24 24">
+      <path d="M17.5 7H7.8a3.8 3.8 0 0 0 0 7.6H10"></path>
+      <path d="M14 4.5 17.5 7 14 9.5"></path>
+      <path d="M6.5 17h9.7a3.8 3.8 0 0 0 0-7.6H14"></path>
+      <path d="M10 14.5 6.5 17 10 19.5"></path>
+    </symbol>
+    <symbol id="i-stop" viewBox="0 0 24 24">
+      <rect x="6.5" y="6.5" width="11" height="11" rx="2"></rect>
+    </symbol>
+    <symbol id="i-alert" viewBox="0 0 24 24">
+      <path d="M12 4.25 20 19H4L12 4.25Z"></path>
+      <path d="M12 9v4.8"></path>
+      <circle cx="12" cy="16.8" r="0.8" fill="currentColor" stroke="none"></circle>
+    </symbol>
+    <symbol id="i-chart" viewBox="0 0 24 24">
+      <path d="M4 18.5h16"></path>
+      <path d="M7 16V11"></path>
+      <path d="M12 16V7"></path>
+      <path d="M17 16v-3.5"></path>
+    </symbol>
+    <symbol id="i-keyword" viewBox="0 0 24 24">
+      <circle cx="8.5" cy="11.5" r="3.5"></circle>
+      <path d="M11.2 14.2 20 23"></path>
+      <path d="M15.5 18.5h2.5"></path>
+      <path d="M17.5 16.5V21"></path>
+    </symbol>
+    <symbol id="i-log" viewBox="0 0 24 24">
+      <path d="M6 4.5h9l3 3V19a1.8 1.8 0 0 1-1.8 1.8H7.8A1.8 1.8 0 0 1 6 19V4.5Z"></path>
+      <path d="M15 4.5V8h3"></path>
+      <path d="M8.5 12h7"></path>
+      <path d="M8.5 15.5h7"></path>
+    </symbol>
+    <symbol id="i-activity" viewBox="0 0 24 24">
+      <path d="M3.5 13h4l2.2-5 4.1 9 2.2-4H20.5"></path>
+    </symbol>
+    <symbol id="i-chat" viewBox="0 0 24 24">
+      <path d="M5 6.5h14v9H9l-4 3v-12Z"></path>
+      <path d="M8.5 10.5h7"></path>
+      <path d="M8.5 13.5h5"></path>
+    </symbol>
+    <symbol id="i-archive" viewBox="0 0 24 24">
+      <path d="M4.5 7.5h15v11a2 2 0 0 1-2 2h-11a2 2 0 0 1-2-2v-11Z"></path>
+      <path d="M3.5 4.5h17v3h-17Z"></path>
+      <path d="M9.5 12h5"></path>
+    </symbol>
+  </svg>
+
   <div class="wrap">
-    <div class="card topbar">
+    <div class="card topbar hero-card">
       <div class="topbar-left">
-        <div class="title-row">
-          <h1>KS Auto Commenter 控制台</h1>
+        <div class="eyebrow">
+          <span class="eyebrow-chip">
+            <svg class="glyph"><use href="#i-orbit"></use></svg>
+            快手养号 / 自动评论
+          </span>
+          <span class="eyebrow-note">运行监控与参数配置</span>
         </div>
-        <div class="muted">配置文件：<span id="configPath">{{ config_path }}</span></div>
+        <div class="title-row">
+          <div class="brand-mark">
+            <svg class="glyph"><use href="#i-orbit"></use></svg>
+          </div>
+          <div class="title-copy">
+            <h1>KS Auto Commenter 控制台</h1>
+            <div class="topbar-copy">用于快手养号、自动评论、关键词管理和运行状态监控。</div>
+          </div>
+        </div>
+        <div class="topbar-meta">
+          <span class="meta-chip">
+            <svg class="glyph"><use href="#i-folder"></use></svg>
+            配置文件：<span id="configPath">{{ config_path }}</span>
+          </span>
+          <span class="meta-chip">
+            <svg class="glyph"><use href="#i-wave"></use></svg>
+            当前阶段：<strong id="heroPhase">{{ initial_phase }}</strong>
+          </span>
+        </div>
       </div>
       <div class="topbar-right">
-        <span class="pill" id="runBadge"><span class="dot"></span><span id="runText">{{ run_status }}</span></span>
-        <span class="pill">最近刷新：<span id="lastUpdated">--</span></span>
+        <span class="pill pill-live" id="runBadge"><span class="dot"></span><span id="runText">{{ run_status }}</span></span>
+        <span class="pill">
+          <svg class="glyph"><use href="#i-refresh"></use></svg>
+          <span>最近刷新：<span id="lastUpdated">--</span></span>
+        </span>
+        <div class="hero-telemetry">
+          <div class="mini-readout">
+            <span>错误</span>
+            <strong id="heroErrorCount">0</strong>
+          </div>
+          <div class="mini-readout">
+            <span>警告</span>
+            <strong id="heroWarnCount">0</strong>
+          </div>
+          <div class="mini-readout">
+            <span>信息</span>
+            <strong id="heroInfoCount">0</strong>
+          </div>
+        </div>
       </div>
     </div>
 
     <div class="card control-panel">
       <div class="panel-body">
+        <div class="control-header">
+          <div class="section-title-main">
+            <span class="icon-shell small accent-cyan">
+              <svg class="glyph"><use href="#i-activity"></use></svg>
+            </span>
+            <span>
+              <span>控制面板</span>
+              <small>启动任务、持续运行任务或手动停止任务</small>
+            </span>
+          </div>
+          {% if message %}<div class="flash-msg">{{ message }}</div>{% endif %}
+        </div>
         <div class="control-buttons">
-          <button type="button" class="btn secondary" id="settingsToggle">设置</button>
+          <button type="button" class="btn secondary" id="settingsToggle">
+            <svg class="glyph"><use href="#i-settings"></use></svg>
+            <span>设置</span>
+          </button>
 
           <form class="control-inline-form" method="post" action="{{ url_for('run_once') }}">
             <input type="hidden" name="config_path" value="{{ config_path }}" />
-            <button class="control-btn" type="submit" name="run_mode" value="once">开始任务（单轮）</button>
+            <button class="control-btn" type="submit" name="run_mode" value="once">
+              <svg class="glyph"><use href="#i-play"></use></svg>
+              <span>开始任务（单轮）</span>
+            </button>
           </form>
 
           <form class="control-inline-form" method="post" action="{{ url_for('run_once') }}">
             <input type="hidden" name="config_path" value="{{ config_path }}" />
-            <button class="control-btn" type="submit" name="run_mode" value="loop">开始任务（持续）</button>
+            <button class="control-btn" type="submit" name="run_mode" value="loop">
+              <svg class="glyph"><use href="#i-repeat"></use></svg>
+              <span>开始任务（持续）</span>
+            </button>
           </form>
 
           <form class="control-inline-form" method="post" action="{{ url_for('stop_task') }}">
             <input type="hidden" name="config_path" value="{{ config_path }}" />
-            <button class="control-btn stop" type="submit">停止任务</button>
+            <button class="control-btn stop" type="submit">
+              <svg class="glyph"><use href="#i-stop"></use></svg>
+              <span>停止任务</span>
+            </button>
           </form>
 
-          <a class="btn secondary" href="{{ url_for('index', config_path=config_path) }}">手动刷新</a>
+          <a class="btn secondary" href="{{ url_for('index', config_path=config_path) }}">
+            <svg class="glyph"><use href="#i-refresh"></use></svg>
+            <span>手动刷新</span>
+          </a>
         </div>
-        {% if message %}<div class="txt-ok" style="font-size:13px;">{{ message }}</div>{% endif %}
-        <div class="muted">这是核心控制区：请优先使用上方“开始任务 / 停止任务”按钮。</div>
+        <div class="muted">用于启动单轮任务、持续任务和停止当前任务。</div>
       </div>
     </div>
 
     <div id="alertBanner" class="alert-banner {{ initial_alert_class }}{% if initial_alert_class == 'alert-info' %} hidden{% endif %}">
-      <div id="alertTitle" class="alert-title">{{ initial_alert_title }}</div>
-      <div id="alertMessage" class="muted">{{ initial_alert_message }}</div>
-      <div id="alertHint" class="muted">{{ initial_alert_hint }}</div>
+      <div class="alert-main">
+        <span class="icon-shell small accent-amber">
+          <svg class="glyph"><use href="#i-alert"></use></svg>
+        </span>
+        <div class="alert-copy">
+          <div class="alert-topline">
+            <div id="alertTitle" class="alert-title">{{ initial_alert_title }}</div>
+            <span class="alert-badge" id="alertLevel">{{ '错误' if initial_alert_class == 'alert-error' else '警告' }}</span>
+          </div>
+          <div id="alertMessage" class="muted">{{ initial_alert_message }}</div>
+          <div id="alertHint" class="muted">{{ initial_alert_hint }}</div>
+        </div>
+      </div>
     </div>
 
     <div class="stats">
-      <div class="card stat"><div class="k">今日评论数</div><div class="v" id="statToday">{{ initial_stats.today_comments }}</div></div>
-      <div class="card stat"><div class="k">累计评论数</div><div class="v" id="statTotal">{{ initial_stats.total_comments }}</div></div>
-      <div class="card stat"><div class="k">关键词历史数</div><div class="v" id="statKeyword">{{ initial_stats.keyword_history_total }}</div></div>
-      <div class="card stat"><div class="k">当前阶段</div><div class="v" id="statPhase" style="font-size:15px; font-weight:700;">{{ initial_phase }}</div></div>
+      <div class="card stat stat-cyan">
+        <div class="metric-head">
+          <div>
+            <div class="k">今日评论数</div>
+            <div class="metric-sub">今日写入数据库</div>
+          </div>
+          <span class="icon-shell small accent-cyan"><svg class="glyph"><use href="#i-chat"></use></svg></span>
+        </div>
+        <div class="v" id="statToday">{{ initial_stats.today_comments }}</div>
+        <div class="metric-foot" id="statTodayTrend">近 3 小时窗口 --</div>
+      </div>
+      <div class="card stat stat-blue">
+        <div class="metric-head">
+          <div>
+            <div class="k">累计评论数</div>
+            <div class="metric-sub">历史累计记录</div>
+          </div>
+          <span class="icon-shell small accent-blue"><svg class="glyph"><use href="#i-archive"></use></svg></span>
+        </div>
+        <div class="v" id="statTotal">{{ initial_stats.total_comments }}</div>
+        <div class="metric-foot" id="statTotalTrend">图表窗口评论 --</div>
+      </div>
+      <div class="card stat stat-lime">
+        <div class="metric-head">
+          <div>
+            <div class="k">关键词历史数</div>
+            <div class="metric-sub">关键词历史记录</div>
+          </div>
+          <span class="icon-shell small accent-lime"><svg class="glyph"><use href="#i-keyword"></use></svg></span>
+        </div>
+        <div class="v" id="statKeyword">{{ initial_stats.keyword_history_total }}</div>
+        <div class="metric-foot" id="statKeywordTrend">近 3 小时扩词 --</div>
+      </div>
+      <div class="card stat stat-phase">
+        <div class="metric-head">
+          <div>
+            <div class="k">当前阶段</div>
+            <div class="metric-sub">从运行日志推断</div>
+          </div>
+          <span class="icon-shell small accent-amber"><svg class="glyph"><use href="#i-wave"></use></svg></span>
+        </div>
+        <div class="v phase-value" id="statPhase">{{ initial_phase }}</div>
+        <div class="metric-foot" id="statPhaseNote">等待轮询数据</div>
+      </div>
+    </div>
+
+    <div class="overview-grid">
+      <div class="card chart-card">
+        <h3 class="section-title section-title-row">
+          <span class="section-title-main">
+            <span class="icon-shell small accent-cyan"><svg class="glyph"><use href="#i-chart"></use></svg></span>
+            <span>
+              <span>活动图表</span>
+              <small>最近 12 小时评论与关键词记录</small>
+            </span>
+          </span>
+          <span class="section-tag">12 小时</span>
+        </h3>
+        <div class="panel-body chart-grid">
+          <div class="chart-stage">
+            <div class="chart-meta">
+              <div class="legend">
+                <span class="legend-item comments">评论量</span>
+                <span class="legend-item keywords">关键词数</span>
+              </div>
+              <div class="chart-values">
+                <div class="chart-value"><span>评论峰值</span><strong id="metricCommentPeak">0</strong></div>
+                <div class="chart-value"><span>关键词峰值</span><strong id="metricKeywordPeak">0</strong></div>
+                <div class="chart-value"><span>窗口总量</span><strong id="metricWindowTotal">0</strong></div>
+              </div>
+            </div>
+            <div class="chart-canvas">
+              <div class="chart-grid-lines"></div>
+              <svg id="activityChart" class="chart-svg" viewBox="0 0 720 220" preserveAspectRatio="none" aria-hidden="true"></svg>
+            </div>
+            <div class="axis-row" id="activityAxis"></div>
+          </div>
+          <div class="chart-side">
+            <div class="mini-panel">
+              <div class="mini-panel-head">
+                <span>关键词活跃度</span>
+                <span class="section-tag">12 小时</span>
+              </div>
+              <div class="mini-bars" id="keywordBars"></div>
+            </div>
+            <div class="mini-panel">
+              <div class="mini-panel-head">
+                <span>日志统计</span>
+                <span class="section-tag" id="logLineBadge">0 行</span>
+              </div>
+              <div class="telemetry-stack">
+                <div class="telemetry-block">
+                  <div class="telemetry-row"><span>错误</span><strong id="telemetryErrorCount">0</strong></div>
+                  <div class="telemetry-meter"><span class="telemetry-fill error" id="telemetryErrorFill"></span></div>
+                </div>
+                <div class="telemetry-block">
+                  <div class="telemetry-row"><span>警告</span><strong id="telemetryWarnCount">0</strong></div>
+                  <div class="telemetry-meter"><span class="telemetry-fill warning" id="telemetryWarnFill"></span></div>
+                </div>
+                <div class="telemetry-block">
+                  <div class="telemetry-row"><span>信息</span><strong id="telemetryInfoCount">0</strong></div>
+                  <div class="telemetry-meter"><span class="telemetry-fill info" id="telemetryInfoFill"></span></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="card signal-card">
+        <h3 class="section-title section-title-row">
+          <span class="section-title-main">
+            <span class="icon-shell small accent-blue"><svg class="glyph"><use href="#i-wave"></use></svg></span>
+            <span>
+              <span>任务状态</span>
+              <small>当前状态、最近告警和日志摘要</small>
+            </span>
+          </span>
+        </h3>
+        <div class="panel-body signal-body">
+          <div class="signal-cluster">
+            <div class="signal-ring" id="signalRing" data-level="info">
+              <div class="signal-ring-core">
+                <span id="signalTone">空闲</span>
+                <strong id="signalPhase">{{ initial_phase }}</strong>
+              </div>
+            </div>
+            <div class="signal-summary">
+              <div class="signal-label">当前摘要</div>
+              <div class="signal-message" id="signalMessage">{{ initial_alert_message }}</div>
+              <div class="muted" id="signalHint">{{ initial_alert_hint }}</div>
+            </div>
+          </div>
+
+          <div class="signal-feed">
+            <div class="feed-item">
+              <span class="feed-label">最近错误</span>
+              <span class="feed-value" id="lastError">--</span>
+            </div>
+            <div class="feed-item">
+              <span class="feed-label">最近警告</span>
+              <span class="feed-value" id="lastWarning">--</span>
+            </div>
+            <div class="feed-item">
+              <span class="feed-label">最近信息</span>
+              <span class="feed-value" id="lastInfo">--</span>
+            </div>
+          </div>
+
+          <div class="signal-footer">
+            <div class="signal-pill">
+              <span class="signal-pill-label">评论记录</span>
+              <strong id="commentCountBadge">0 条</strong>
+            </div>
+            <div class="signal-pill">
+              <span class="signal-pill-label">关键词记录</span>
+              <strong id="keywordCountBadge">0 条</strong>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
 
     <div class="layout">
       <div class="card hidden" id="settingsPanel">
-        <h3 class="section-title settings-title"><span>运行配置</span><button type="button" class="settings-close" id="settingsClose">收起</button></h3>
+        <h3 class="section-title settings-title">
+          <span class="section-title-main">
+            <span class="icon-shell small accent-blue"><svg class="glyph"><use href="#i-settings"></use></svg></span>
+            <span>运行配置</span>
+          </span>
+          <button type="button" class="settings-close" id="settingsClose">收起</button>
+        </h3>
         <div class="panel-body">
           <form id="settingsForm" method="post" action="{{ url_for('save') }}">
             <input type="hidden" name="config_path" value="{{ config_path }}" />
@@ -656,8 +1917,17 @@ HTML = """
 
       <div>
         <div class="tables">
-          <div class="card">
-            <h3 class="section-title">评论日志（每秒动态）</h3>
+          <div class="card table-card">
+            <h3 class="section-title section-title-row">
+              <span class="section-title-main">
+                <span class="icon-shell small accent-cyan"><svg class="glyph"><use href="#i-chat"></use></svg></span>
+                <span>
+                  <span>评论日志</span>
+                  <small>每秒动态刷新</small>
+                </span>
+              </span>
+              <span class="section-tag" id="commentTableBadge">0 条</span>
+            </h3>
             <div class="table-wrap">
               <table>
                 <thead><tr><th style="width:108px">时间</th><th style="width:72px">关键词</th><th style="width:150px">帖子ID</th><th>评论内容</th></tr></thead>
@@ -666,8 +1936,17 @@ HTML = """
             </div>
           </div>
 
-          <div class="card">
-            <h3 class="section-title">关键词历史（防重复）</h3>
+          <div class="card table-card">
+            <h3 class="section-title section-title-row">
+              <span class="section-title-main">
+                <span class="icon-shell small accent-lime"><svg class="glyph"><use href="#i-keyword"></use></svg></span>
+                <span>
+                  <span>关键词历史</span>
+                  <small>防重复扩词轨迹</small>
+                </span>
+              </span>
+              <span class="section-tag" id="keywordTableBadge">0 条</span>
+            </h3>
             <div class="table-wrap">
               <table>
                 <thead><tr><th style="width:108px">时间</th><th style="width:84px">方向词</th><th>已用关键词</th></tr></thead>
@@ -678,7 +1957,16 @@ HTML = """
         </div>
 
         <div class="card log-card">
-          <h3 class="section-title">运行日志（每秒轮询）</h3>
+          <h3 class="section-title section-title-row">
+            <span class="section-title-main">
+              <span class="icon-shell small accent-blue"><svg class="glyph"><use href="#i-log"></use></svg></span>
+              <span>
+                <span>运行日志</span>
+                <small>每秒轮询 tail</small>
+              </span>
+            </span>
+            <span class="section-tag" id="runtimeLogBadge">0 行</span>
+          </h3>
           <pre id="runtimeLog"></pre>
           <div class="row-inline">
             <span class="muted">每 1 秒刷新；可用于观察运行状态与报错</span>
@@ -693,19 +1981,57 @@ HTML = """
     const configPath = {{ config_path | tojson }};
     const initialData = {{ initial_payload | tojson }};
 
+    const bodyEl = document.body;
     const runBadge = document.getElementById('runBadge');
     const runText = document.getElementById('runText');
     const lastUpdated = document.getElementById('lastUpdated');
+    const heroPhase = document.getElementById('heroPhase');
+    const heroErrorCount = document.getElementById('heroErrorCount');
+    const heroWarnCount = document.getElementById('heroWarnCount');
+    const heroInfoCount = document.getElementById('heroInfoCount');
 
     const alertBanner = document.getElementById('alertBanner');
     const alertTitle = document.getElementById('alertTitle');
     const alertMessage = document.getElementById('alertMessage');
     const alertHint = document.getElementById('alertHint');
+    const alertLevel = document.getElementById('alertLevel');
 
     const statToday = document.getElementById('statToday');
     const statTotal = document.getElementById('statTotal');
     const statKeyword = document.getElementById('statKeyword');
     const statPhase = document.getElementById('statPhase');
+    const statTodayTrend = document.getElementById('statTodayTrend');
+    const statTotalTrend = document.getElementById('statTotalTrend');
+    const statKeywordTrend = document.getElementById('statKeywordTrend');
+    const statPhaseNote = document.getElementById('statPhaseNote');
+
+    const metricCommentPeak = document.getElementById('metricCommentPeak');
+    const metricKeywordPeak = document.getElementById('metricKeywordPeak');
+    const metricWindowTotal = document.getElementById('metricWindowTotal');
+    const activityChart = document.getElementById('activityChart');
+    const activityAxis = document.getElementById('activityAxis');
+    const keywordBars = document.getElementById('keywordBars');
+    const logLineBadge = document.getElementById('logLineBadge');
+    const runtimeLogBadge = document.getElementById('runtimeLogBadge');
+    const telemetryErrorCount = document.getElementById('telemetryErrorCount');
+    const telemetryWarnCount = document.getElementById('telemetryWarnCount');
+    const telemetryInfoCount = document.getElementById('telemetryInfoCount');
+    const telemetryErrorFill = document.getElementById('telemetryErrorFill');
+    const telemetryWarnFill = document.getElementById('telemetryWarnFill');
+    const telemetryInfoFill = document.getElementById('telemetryInfoFill');
+
+    const signalRing = document.getElementById('signalRing');
+    const signalTone = document.getElementById('signalTone');
+    const signalPhase = document.getElementById('signalPhase');
+    const signalMessage = document.getElementById('signalMessage');
+    const signalHint = document.getElementById('signalHint');
+    const lastError = document.getElementById('lastError');
+    const lastWarning = document.getElementById('lastWarning');
+    const lastInfo = document.getElementById('lastInfo');
+    const commentCountBadge = document.getElementById('commentCountBadge');
+    const keywordCountBadge = document.getElementById('keywordCountBadge');
+    const commentTableBadge = document.getElementById('commentTableBadge');
+    const keywordTableBadge = document.getElementById('keywordTableBadge');
 
     const commentRows = document.getElementById('commentRows');
     const keywordRows = document.getElementById('keywordRows');
@@ -718,6 +2044,7 @@ HTML = """
     const settingsForm = document.getElementById('settingsForm');
     const testConnectionBtn = document.getElementById('testConnectionBtn');
     const testConnectionLog = document.getElementById('testConnectionLog');
+    let lastActivitySignature = '';
 
     function esc(value) {
       return String(value == null ? '' : value)
@@ -726,6 +2053,197 @@ HTML = """
         .replace(/>/g, '&gt;')
         .replace(/"/g, '&quot;')
         .replace(/'/g, '&#39;');
+    }
+
+    function tryRender(label, fn) {
+      try {
+        fn();
+      } catch (err) {
+        console.error(`render ${label} failed`, err);
+      }
+    }
+
+    function clip(value, maxLen = 96) {
+      const text = String(value == null ? '' : value).trim();
+      if (!text) return '--';
+      return text.length > maxLen ? `${text.slice(0, Math.max(0, maxLen - 3))}...` : text;
+    }
+
+    function toNum(value) {
+      const num = Number(value);
+      return Number.isFinite(num) ? num : 0;
+    }
+
+    function sum(values) {
+      return (Array.isArray(values) ? values : []).reduce((acc, value) => acc + toNum(value), 0);
+    }
+
+    function recentWindow(values, size = 3) {
+      const safe = Array.isArray(values) ? values : [];
+      return sum(safe.slice(Math.max(0, safe.length - size)));
+    }
+
+    function previousWindow(values, size = 3) {
+      const safe = Array.isArray(values) ? values : [];
+      return sum(safe.slice(Math.max(0, safe.length - size * 2), Math.max(0, safe.length - size)));
+    }
+
+    function describeWindow(prefix, values) {
+      const recent = recentWindow(values, 3);
+      const prev = previousWindow(values, 3);
+      const delta = recent - prev;
+      const signed = delta > 0 ? `+${delta}` : `${delta}`;
+      return `${prefix}${recent} 条 / 对比上一窗口 ${signed}`;
+    }
+
+    function seriesPoints(values, maxValue, width, height, padX, padY) {
+      const safe = Array.isArray(values) ? values : [];
+      const spanX = Math.max(1, width - padX * 2);
+      const spanY = Math.max(1, height - padY * 2);
+      const denominator = Math.max(1, safe.length - 1);
+      return safe.map((value, index) => {
+        const x = padX + (spanX * index) / denominator;
+        const y = height - padY - (spanY * toNum(value)) / Math.max(maxValue, 1);
+        return { x, y };
+      });
+    }
+
+    function linePath(points) {
+      if (!points.length) return '';
+      return points.map((point, index) => `${index === 0 ? 'M' : 'L'}${point.x.toFixed(2)},${point.y.toFixed(2)}`).join(' ');
+    }
+
+    function areaPath(points, baseY) {
+      if (!points.length) return '';
+      const start = points[0];
+      const end = points[points.length - 1];
+      return `${linePath(points)} L${end.x.toFixed(2)},${baseY.toFixed(2)} L${start.x.toFixed(2)},${baseY.toFixed(2)} Z`;
+    }
+
+    function renderActivity(activity) {
+      const labels = Array.isArray(activity && activity.labels) ? activity.labels : [];
+      const comments = labels.map((_, index) => toNum(activity && activity.comments && activity.comments[index]));
+      const keywords = labels.map((_, index) => toNum(activity && activity.keywords && activity.keywords[index]));
+      const peakComment = Math.max(0, ...comments);
+      const peakKeyword = Math.max(0, ...keywords);
+      const maxValue = Math.max(1, peakComment, peakKeyword);
+      const totalWindow = sum(comments) + sum(keywords);
+      const activitySignature = JSON.stringify({ labels, comments, keywords });
+
+      metricCommentPeak.textContent = peakComment;
+      metricKeywordPeak.textContent = peakKeyword;
+      metricWindowTotal.textContent = totalWindow;
+
+      statTodayTrend.textContent = describeWindow('近 3 小时评论 ', comments);
+      statTotalTrend.textContent = `图表窗口评论 ${sum(comments)} 条`;
+      statKeywordTrend.textContent = describeWindow('近 3 小时关键词 ', keywords);
+
+      if (!labels.length) {
+        lastActivitySignature = '';
+        if (activityChart) activityChart.innerHTML = '';
+        if (activityAxis) activityAxis.innerHTML = '';
+        if (keywordBars) keywordBars.innerHTML = '';
+        return;
+      }
+
+      if (activitySignature === lastActivitySignature) {
+        return;
+      }
+      lastActivitySignature = activitySignature;
+
+      const width = 720;
+      const height = 220;
+      const padX = 18;
+      const padY = 18;
+      const baseY = height - padY;
+      const commentPoints = seriesPoints(comments, maxValue, width, height, padX, padY);
+      const keywordPoints = seriesPoints(keywords, maxValue, width, height, padX, padY);
+
+      if (activityChart) {
+        activityChart.innerHTML = `
+          <defs>
+            <linearGradient id="commentsFill" x1="0" x2="0" y1="0" y2="1">
+              <stop offset="0%" stop-color="rgba(119, 232, 255, 0.38)"></stop>
+              <stop offset="100%" stop-color="rgba(119, 232, 255, 0.02)"></stop>
+            </linearGradient>
+            <linearGradient id="keywordsFill" x1="0" x2="0" y1="0" y2="1">
+              <stop offset="0%" stop-color="rgba(199, 255, 138, 0.28)"></stop>
+              <stop offset="100%" stop-color="rgba(199, 255, 138, 0.02)"></stop>
+            </linearGradient>
+          </defs>
+          <path class="chart-area keywords" d="${areaPath(keywordPoints, baseY)}"></path>
+          <path class="chart-area comments" d="${areaPath(commentPoints, baseY)}"></path>
+          <path class="chart-line keywords" d="${linePath(keywordPoints)}"></path>
+          <path class="chart-line comments" d="${linePath(commentPoints)}"></path>
+          ${keywordPoints.map((point) => `<circle class="chart-point keywords" cx="${point.x.toFixed(2)}" cy="${point.y.toFixed(2)}" r="3.3"></circle>`).join('')}
+          ${commentPoints.map((point) => `<circle class="chart-point comments" cx="${point.x.toFixed(2)}" cy="${point.y.toFixed(2)}" r="3.3"></circle>`).join('')}
+        `;
+      }
+
+      if (activityAxis) {
+        activityAxis.innerHTML = labels.map((label, index) => {
+          const extraClass = index === labels.length - 1 ? ' is-current' : '';
+          return `<span class="axis-pill${extraClass}">${esc(label)}</span>`;
+        }).join('');
+      }
+
+      if (keywordBars) {
+        keywordBars.innerHTML = labels.map((label, index) => {
+          const value = keywords[index];
+          const heightPct = peakKeyword > 0 ? Math.max(6, (value / peakKeyword) * 100) : 0;
+          return `
+            <div class="mini-bar-col">
+              <div class="mini-bar-value">${value}</div>
+              <div class="mini-bar-track">
+                <span class="mini-bar" style="--bar-height:${heightPct}%"></span>
+              </div>
+              <div class="mini-bar-label">${esc(label.slice(0, 2))}</div>
+            </div>
+          `;
+        }).join('');
+      }
+    }
+
+    function renderTelemetry(telemetry, logsText) {
+      const safe = telemetry || {};
+      const error = toNum(safe.error);
+      const warning = toNum(safe.warning);
+      const info = toNum(safe.info);
+      const lines = toNum(safe.lines) || String(logsText || '').split('\\n').filter((line) => line.trim()).length;
+      const total = Math.max(1, error + warning + info);
+
+      heroErrorCount.textContent = error;
+      heroWarnCount.textContent = warning;
+      heroInfoCount.textContent = info;
+
+      telemetryErrorCount.textContent = error;
+      telemetryWarnCount.textContent = warning;
+      telemetryInfoCount.textContent = info;
+      telemetryErrorFill.style.width = `${(error / total) * 100}%`;
+      telemetryWarnFill.style.width = `${(warning / total) * 100}%`;
+      telemetryInfoFill.style.width = `${(info / total) * 100}%`;
+      logLineBadge.textContent = `${lines} 行`;
+      runtimeLogBadge.textContent = `${lines} 行`;
+    }
+
+    function renderSignalPanel(payload) {
+      const alert = payload.alert || {};
+      const summary = payload.summary || {};
+      const level = alert.level || (payload.running ? 'info' : 'info');
+      const tone = level === 'error' ? '错误' : level === 'warn' ? '警告' : (payload.running ? '运行中' : '空闲');
+      const message = alert.message || summary.last_info || (payload.running ? '任务运行中' : '系统待机中');
+      const hint = alert.hint || summary.last_warning || summary.last_error || '等待新的运行信号';
+
+      signalRing.dataset.level = level === 'error' ? 'error' : (level === 'warn' ? 'warn' : 'info');
+      signalTone.textContent = tone;
+      signalPhase.textContent = summary.phase || '待机';
+      signalMessage.textContent = message;
+      signalHint.textContent = clip(hint, 120);
+      lastError.textContent = clip(summary.last_error, 120);
+      lastWarning.textContent = clip(summary.last_warning, 120);
+      lastInfo.textContent = clip(summary.last_info, 120);
+      statPhaseNote.textContent = clip(message, 80);
+      heroPhase.textContent = summary.phase || '待机';
     }
 
     function setSettingsVisible(visible) {
@@ -771,19 +2289,27 @@ HTML = """
     if (testConnectionBtn) testConnectionBtn.addEventListener('click', testConnection);
 
     function renderComments(rows) {
-      if (!rows || rows.length === 0) {
+      const safeRows = Array.isArray(rows) ? rows : [];
+      commentCountBadge.textContent = `${safeRows.length} 条`;
+      commentTableBadge.textContent = `${safeRows.length} 条`;
+
+      if (safeRows.length === 0) {
         commentRows.innerHTML = '<tr><td colspan="4" class="muted">暂无评论记录</td></tr>';
         return;
       }
-      commentRows.innerHTML = rows.map((row) => `\n<tr>\n<td>${esc(row.created_at)}</td>\n<td>${esc(row.keyword)}</td>\n<td>${esc(row.post_id)}</td>\n<td>${esc(row.comment_text)}</td>\n</tr>`).join('');
+      commentRows.innerHTML = safeRows.map((row) => `\n<tr>\n<td>${esc(row.created_at)}</td>\n<td>${esc(row.keyword)}</td>\n<td>${esc(row.post_id)}</td>\n<td>${esc(row.comment_text)}</td>\n</tr>`).join('');
     }
 
     function renderKeywords(rows) {
-      if (!rows || rows.length === 0) {
+      const safeRows = Array.isArray(rows) ? rows : [];
+      keywordCountBadge.textContent = `${safeRows.length} 条`;
+      keywordTableBadge.textContent = `${safeRows.length} 条`;
+
+      if (safeRows.length === 0) {
         keywordRows.innerHTML = '<tr><td colspan="3" class="muted">暂无关键词历史</td></tr>';
         return;
       }
-      keywordRows.innerHTML = rows.map((row) => `\n<tr>\n<td>${esc(row.created_at)}</td>\n<td>${esc(row.topic)}</td>\n<td>${esc(row.keyword)}</td>\n</tr>`).join('');
+      keywordRows.innerHTML = safeRows.map((row) => `\n<tr>\n<td>${esc(row.created_at)}</td>\n<td>${esc(row.topic)}</td>\n<td>${esc(row.keyword)}</td>\n</tr>`).join('');
     }
 
     function applyAlert(alert) {
@@ -805,12 +2331,15 @@ HTML = """
       alertTitle.textContent = title;
       alertMessage.textContent = message;
       alertHint.textContent = hint;
+      alertLevel.textContent = level === 'error' ? '错误' : '警告';
     }
 
     function renderStatus(payload) {
       const running = !!payload.running;
-      runText.textContent = running ? '运行中' : '空闲';
-      runBadge.innerHTML = `<span class="dot ${running ? 'ok' : ''}"></span><span>${running ? '运行中' : '空闲'}</span>`;
+      bodyEl.dataset.state = running ? 'running' : 'idle';
+      if (runText) runText.textContent = running ? '运行中' : '空闲';
+      const runDot = runBadge ? runBadge.querySelector('.dot') : null;
+      if (runDot) runDot.classList.toggle('ok', running);
 
       const stats = payload.stats || {};
       statToday.textContent = (stats.today_comments === undefined || stats.today_comments === null) ? 0 : stats.today_comments;
@@ -820,14 +2349,18 @@ HTML = """
       const summary = payload.summary || {};
       statPhase.textContent = summary.phase || '待机';
 
-      runtimeLog.textContent = payload.logs || '(no log file yet)';
+      const logsText = payload.logs || '暂无日志文件';
+      runtimeLog.textContent = logsText;
       if (autoScroll.checked) runtimeLog.scrollTop = runtimeLog.scrollHeight;
 
-      renderComments(payload.comments || []);
-      renderKeywords(payload.keyword_history || []);
-      applyAlert(payload.alert || {});
+      tryRender('activity', () => renderActivity(payload.activity || {}));
+      tryRender('telemetry', () => renderTelemetry(payload.telemetry || {}, logsText));
+      tryRender('signal', () => renderSignalPanel(payload));
+      tryRender('comments', () => renderComments(payload.comments || []));
+      tryRender('keywords', () => renderKeywords(payload.keyword_history || []));
+      tryRender('alert', () => applyAlert(payload.alert || {}));
 
-      lastUpdated.textContent = new Date().toLocaleTimeString();
+      lastUpdated.textContent = new Date().toLocaleTimeString('zh-CN', { hour12: false });
     }
 
     let inFlight = false;
@@ -873,7 +2406,7 @@ def _save_yaml(path: Path, data: Dict[str, Any]) -> None:
 
 def _tail_log(path: Path, lines: int = 260) -> str:
     if not path.exists():
-        return "(no log file yet)"
+        return "暂无日志文件"
     text = path.read_text(encoding="utf-8", errors="ignore").splitlines()
     return "\n".join(text[-lines:])
 
@@ -976,6 +2509,77 @@ def _db_stats(db_path: Path) -> Dict[str, int]:
         return {"today_comments": 0, "total_comments": 0, "keyword_history_total": 0}
     finally:
         conn.close()
+
+
+def _table_exists(conn: sqlite3.Connection, table_name: str) -> bool:
+    row = conn.execute(
+        "SELECT 1 FROM sqlite_master WHERE type='table' AND name=? LIMIT 1",
+        (table_name,),
+    ).fetchone()
+    return bool(row)
+
+
+def _chart_window(hours: int = 12) -> Tuple[List[str], List[str]]:
+    total_hours = max(6, min(24, int(hours or 12)))
+    window_end = datetime.now().replace(minute=0, second=0, microsecond=0)
+    buckets = [window_end - timedelta(hours=total_hours - idx - 1) for idx in range(total_hours)]
+    return [bucket.strftime("%H:%M") for bucket in buckets], [bucket.strftime("%Y-%m-%dT%H") for bucket in buckets]
+
+
+def _hourly_counts(conn: sqlite3.Connection, table_name: str, bucket_keys: List[str]) -> List[int]:
+    if not bucket_keys or not _table_exists(conn, table_name):
+        return [0] * len(bucket_keys)
+
+    start_key = bucket_keys[0]
+    rows = conn.execute(
+        f"SELECT substr(created_at, 1, 13) AS bucket, COUNT(1) AS cnt "
+        f"FROM {table_name} "
+        "WHERE substr(created_at, 1, 13) >= ? "
+        "GROUP BY bucket "
+        "ORDER BY bucket ASC",
+        (start_key,),
+    ).fetchall()
+    counts = {str(bucket): int(cnt or 0) for bucket, cnt in rows if bucket}
+    return [counts.get(key, 0) for key in bucket_keys]
+
+
+def _activity_chart(db_path: Path, hours: int = 12) -> Dict[str, Any]:
+    labels, bucket_keys = _chart_window(hours)
+    empty = {
+        "labels": labels,
+        "comments": [0] * len(labels),
+        "keywords": [0] * len(labels),
+    }
+    if not db_path.exists():
+        return empty
+
+    conn = sqlite3.connect(db_path)
+    try:
+        return {
+            "labels": labels,
+            "comments": _hourly_counts(conn, "comments", bucket_keys),
+            "keywords": _hourly_counts(conn, "keyword_history", bucket_keys),
+        }
+    except Exception:
+        return empty
+    finally:
+        conn.close()
+
+
+def _log_telemetry(log_text: str) -> Dict[str, int]:
+    lines = [line for line in log_text.splitlines() if line.strip()]
+    counts = {"error": 0, "warning": 0, "info": 0, "lines": len(lines)}
+
+    for line in lines:
+        upper = line.upper()
+        if "| ERROR |" in upper:
+            counts["error"] += 1
+        elif "| WARNING |" in upper:
+            counts["warning"] += 1
+        elif "| INFO |" in upper:
+            counts["info"] += 1
+
+    return counts
 
 
 def _iter_process_entries() -> List[Tuple[int, str]]:
@@ -1326,14 +2930,17 @@ def _live_payload(config_path: Path) -> Dict[str, Any]:
     cfg, log_path, db_path = _resolve_paths(config_path)
     running = _is_running(config_path)
     logs = _tail_log(log_path, 260)
+    summary = _runtime_summary(logs, running)
     return {
         "running": running,
         "run_status": "运行中" if running else "空闲",
         "stats": _db_stats(db_path),
         "comments": _recent_comments(db_path),
         "keyword_history": _recent_keyword_history(db_path),
+        "activity": _activity_chart(db_path),
+        "telemetry": _log_telemetry(logs),
         "logs": logs,
-        "summary": _runtime_summary(logs, running),
+        "summary": summary,
         "alert": _classify_alert(logs, running),
         "config_file": str(config_path),
     }
