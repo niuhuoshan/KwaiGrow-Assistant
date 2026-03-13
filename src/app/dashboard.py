@@ -405,29 +405,242 @@ HTML = """
 
     .hidden { display: none !important; }
 
-    .settings-title {
+    body.modal-open {
+      overflow: hidden;
+    }
+
+    .settings-modal {
+      position: fixed;
+      inset: 0;
+      min-height: 100dvh;
+      z-index: 40;
       display: flex;
       align-items: center;
+      justify-content: center;
+      padding: 24px;
+      overflow-y: auto;
+      overscroll-behavior: contain;
+      background: rgba(2, 7, 14, 0.7);
+      backdrop-filter: blur(18px);
+    }
+
+    .settings-dialog {
+      width: min(1120px, 100%);
+      max-height: min(92vh, 920px);
+      margin: auto;
+      display: grid;
+      grid-template-rows: auto minmax(0, 1fr) auto;
+      border-radius: 24px;
+      border: 1px solid rgba(132, 166, 218, 0.2);
+      background: linear-gradient(180deg, rgba(8, 18, 33, 0.98), rgba(4, 10, 20, 0.98));
+      box-shadow: 0 36px 90px rgba(0, 0, 0, 0.4);
+      overflow: hidden;
+    }
+
+    .settings-header {
+      display: flex;
+      align-items: flex-start;
       justify-content: space-between;
-      gap: 10px;
+      gap: 16px;
+      padding: 22px 24px 18px;
+      border-bottom: 1px solid rgba(132, 166, 218, 0.14);
+      background: linear-gradient(180deg, rgba(12, 27, 48, 0.9), rgba(8, 18, 33, 0.7));
+    }
+
+    .settings-heading {
+      display: grid;
+      gap: 8px;
+      min-width: 0;
+    }
+
+    .settings-subtitle {
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.6;
+    }
+
+    .settings-heading small {
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 500;
+      letter-spacing: .04em;
     }
 
     .settings-close {
-      border: 1px solid var(--line);
-      border-radius: 12px;
+      border: 1px solid rgba(132, 166, 218, 0.2);
+      border-radius: 14px;
       background: rgba(255,255,255,0.04);
       color: var(--text);
-      padding: 8px 12px;
+      padding: 10px 14px;
       cursor: pointer;
+      font-size: 13px;
+      flex: 0 0 auto;
+    }
+
+    .settings-form {
+      min-height: 0;
+      display: grid;
+      grid-template-rows: minmax(0, 1fr) auto;
+    }
+
+    .settings-form-shell {
+      min-height: 0;
+      display: grid;
+      grid-template-columns: 220px minmax(0, 1fr);
+    }
+
+    .settings-tabs {
+      display: grid;
+      align-content: start;
+      gap: 10px;
+      padding: 18px;
+      border-right: 1px solid rgba(132, 166, 218, 0.14);
+      background: linear-gradient(180deg, rgba(10, 21, 38, 0.92), rgba(6, 13, 24, 0.92));
+    }
+
+    .settings-tab {
+      width: 100%;
+      justify-content: flex-start;
+      align-items: flex-start;
+      padding: 12px;
+      border-radius: 18px;
+      border: 1px solid rgba(132, 166, 218, 0.12);
+      background: rgba(255,255,255,0.03);
+      text-align: left;
+      box-shadow: none;
+    }
+
+    .settings-tab.is-active {
+      border-color: rgba(105, 200, 255, 0.34);
+      background: linear-gradient(180deg, rgba(56,189,248,0.16), rgba(15, 29, 50, 0.82));
+      box-shadow: inset 0 1px 0 rgba(255,255,255,0.06), 0 12px 28px rgba(0,0,0,0.18);
+    }
+
+    .settings-tab-copy {
+      display: grid;
+      gap: 4px;
+      min-width: 0;
+    }
+
+    .settings-tab-title {
+      font-size: 14px;
+      font-weight: 700;
+      color: #e8f2ff;
+    }
+
+    .settings-tab-note {
+      color: var(--muted);
       font-size: 12px;
+      line-height: 1.45;
+      white-space: normal;
+    }
+
+    .settings-panels {
+      min-height: 0;
+      overflow: auto;
+      padding: 20px;
+      display: grid;
+    }
+
+    .settings-panel {
+      display: none;
+      align-content: start;
+      gap: 16px;
+      min-width: 0;
+    }
+
+    .settings-panel.is-active {
+      display: grid;
+    }
+
+    .settings-panel-head {
+      display: grid;
+      gap: 6px;
+    }
+
+    .settings-panel-head h4 {
+      margin: 0;
+      font-size: 18px;
+    }
+
+    .settings-panel-head p {
+      margin: 0;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.6;
+    }
+
+    .settings-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 14px;
+      min-width: 0;
+    }
+
+    .setting-card {
+      min-width: 0;
+      padding: 16px;
+      border-radius: 18px;
+      border: 1px solid rgba(132, 166, 218, 0.14);
+      background: linear-gradient(180deg, rgba(14, 28, 49, 0.88), rgba(7, 15, 27, 0.9));
+      display: grid;
+      gap: 10px;
+    }
+
+    .setting-card.full {
+      grid-column: 1 / -1;
+    }
+
+    .setting-card label {
+      margin: 0;
+    }
+
+    .setting-title {
+      font-size: 14px;
+      font-weight: 700;
+      color: #e6f2ff;
+    }
+
+    .setting-hint {
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.55;
+    }
+
+    .setting-chip {
+      display: inline-flex;
+      width: fit-content;
+      align-items: center;
+      min-height: 28px;
+      padding: 4px 10px;
+      border-radius: 999px;
+      border: 1px solid rgba(132, 166, 218, 0.14);
+      background: rgba(255,255,255,0.04);
+      color: #d5e8ff;
+      font-size: 11px;
+      letter-spacing: .06em;
+      text-transform: uppercase;
+    }
+
+    .setting-toggle-head {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 12px;
+      align-items: center;
+    }
+
+    .setting-toggle-copy {
+      display: grid;
+      gap: 6px;
+      min-width: 0;
     }
 
     .test-log {
-      margin: 8px 0 0;
+      margin: 0;
       border: 1px solid var(--line);
       border-radius: 16px;
       padding: 12px 14px;
-      min-height: 54px;
+      min-height: 72px;
       max-height: 220px;
       overflow: auto;
       background: linear-gradient(180deg, rgba(6, 16, 30, 0.98), rgba(8, 18, 36, 0.96));
@@ -439,27 +652,11 @@ HTML = """
       font-family: "IBM Plex Mono", "Cascadia Code", "JetBrains Mono", Consolas, monospace;
     }
 
-    .switch-row {
-      margin: 12px 0 4px;
-      display: grid;
-      grid-template-columns: minmax(0, 1fr) auto;
-      align-items: start;
-      gap: 12px;
-      font-size: 13px;
-      font-weight: 600;
-    }
-
-    .switch-row span {
-      min-width: 0;
-      line-height: 1.35;
-      overflow-wrap: anywhere;
-    }
-
     .switch {
       position: relative;
       display: inline-block;
-      width: 48px;
-      height: 28px;
+      width: 54px;
+      height: 32px;
       flex: 0 0 auto;
     }
 
@@ -474,22 +671,28 @@ HTML = """
       position: absolute;
       inset: 0;
       border-radius: 999px;
-      background: rgba(66, 86, 117, 0.9);
+      background: rgba(66, 86, 117, 0.86);
       transition: .2s;
       cursor: pointer;
       border: 1px solid rgba(255,255,255,0.18);
+      box-shadow: inset 0 1px 0 rgba(255,255,255,0.06);
     }
 
     .switch-slider:before {
       content: '';
       position: absolute;
-      width: 22px;
-      height: 22px;
-      left: 2px;
-      top: 2px;
+      width: 24px;
+      height: 24px;
+      left: 3px;
+      top: 3px;
       border-radius: 50%;
       background: #fff;
       transition: .2s;
+      box-shadow: 0 4px 14px rgba(0,0,0,0.22);
+    }
+
+    .switch-input:focus + .switch-slider {
+      box-shadow: 0 0 0 4px rgba(64,165,255,0.14);
     }
 
     .switch-input:checked + .switch-slider {
@@ -498,7 +701,29 @@ HTML = """
     }
 
     .switch-input:checked + .switch-slider:before {
-      transform: translateX(20px);
+      transform: translateX(22px);
+    }
+
+    .settings-footer {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 14px;
+      padding: 16px 24px 20px;
+      border-top: 1px solid rgba(132, 166, 218, 0.14);
+      background: linear-gradient(180deg, rgba(8, 18, 33, 0.82), rgba(5, 11, 22, 0.96));
+    }
+
+    .settings-footer-copy {
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.55;
+    }
+
+    .settings-footer-actions {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
     }
 
     .control-panel .panel-body {
@@ -1367,11 +1592,9 @@ HTML = """
     @keyframes sceneIn {
       from {
         opacity: 0;
-        transform: translateY(8px);
       }
       to {
         opacity: 1;
-        transform: translateY(0);
       }
     }
 
@@ -1412,6 +1635,14 @@ HTML = """
       .chart-values { width: 100%; }
       .hero-telemetry { grid-template-columns: repeat(3, minmax(0, 1fr)); }
       .topbar-right { justify-content: flex-start; }
+      .settings-form-shell { grid-template-columns: 1fr; }
+      .settings-tabs {
+        grid-template-columns: repeat(4, minmax(160px, 1fr));
+        grid-auto-flow: column;
+        overflow-x: auto;
+        border-right: 0;
+        border-bottom: 1px solid rgba(132, 166, 218, 0.14);
+      }
     }
 
     @media (max-width: 720px) {
@@ -1430,6 +1661,16 @@ HTML = """
       .control-inline-form { width: 100%; }
       .control-btn, .btn { width: 100%; }
       button, .btn { white-space: normal; }
+      .settings-modal { padding: 10px; }
+      .settings-dialog { max-height: calc(100vh - 20px); }
+      .settings-header,
+      .settings-footer { padding-left: 16px; padding-right: 16px; }
+      .settings-header { flex-direction: column; }
+      .settings-grid { grid-template-columns: 1fr; }
+      .settings-panels { padding: 16px; }
+      .settings-footer,
+      .settings-footer-actions { flex-direction: column; align-items: stretch; }
+      .settings-tab { min-width: 150px; }
     }
 
     @media (prefers-reduced-motion: reduce) {
@@ -1453,6 +1694,13 @@ HTML = """
     <symbol id="i-folder" viewBox="0 0 24 24">
       <path d="M3.5 7.5h6l1.8 2h9.2v7.8a2.2 2.2 0 0 1-2.2 2.2H5.7a2.2 2.2 0 0 1-2.2-2.2V7.5Z"></path>
       <path d="M3.5 9.5h17"></path>
+    </symbol>
+    <symbol id="i-browser" viewBox="0 0 24 24">
+      <rect x="3.5" y="5" width="17" height="14" rx="2.4"></rect>
+      <path d="M3.5 9h17"></path>
+      <path d="M7 7h.01"></path>
+      <path d="M10 7h.01"></path>
+      <path d="M13 7h.01"></path>
     </symbol>
     <symbol id="i-wave" viewBox="0 0 24 24">
       <path d="M3.5 12h2.8l2.1-4.5 3.2 9 2.8-6 2.1 3.5h4"></path>
@@ -1587,7 +1835,7 @@ HTML = """
         <div class="control-buttons">
           <button type="button" class="btn secondary" id="settingsToggle">
             <svg class="glyph"><use href="#i-settings"></use></svg>
-            <span>设置</span>
+            <span>任务设置</span>
           </button>
 
           <form class="control-inline-form" method="post" action="{{ url_for('run_once') }}">
@@ -1803,118 +2051,6 @@ HTML = """
     </div>
 
     <div class="layout">
-      <div class="card hidden" id="settingsPanel">
-        <h3 class="section-title settings-title">
-          <span class="section-title-main">
-            <span class="icon-shell small accent-blue"><svg class="glyph"><use href="#i-settings"></use></svg></span>
-            <span>运行配置</span>
-          </span>
-          <button type="button" class="settings-close" id="settingsClose">收起</button>
-        </h3>
-        <div class="panel-body">
-          <form id="settingsForm" method="post" action="{{ url_for('save') }}">
-            <input type="hidden" name="config_path" value="{{ config_path }}" />
-
-            <label>模型 Base URL</label>
-            <input type="text" name="openai_base_url" value="{{ cfg.openai.base_url if cfg.openai else '' }}" placeholder="https://gmn.chuangzuoli.com" />
-
-            <label>模型 ID</label>
-            <input type="text" name="openai_model_id" value="{{ cfg.openai.model_id if cfg.openai else '' }}" placeholder="gpt-5.3-codex" />
-
-            <label>API Key（保存到配置）</label>
-            <input type="text" name="openai_api_key" value="{{ cfg.openai.api_key if cfg.openai else '' }}" placeholder="sk-..." />
-
-            <div class="buttons">
-              <button type="button" class="btn secondary" id="testConnectionBtn">测试连接</button>
-            </div>
-            <pre id="testConnectionLog" class="test-log">点击“测试连接”可查看连通结果与详细错误日志。</pre>
-
-            <div class="switch-row">
-              <span>显示浏览器窗口（非无头模式）</span>
-              <label class="switch" for="headless">
-                <input id="headless" class="switch-input" type="checkbox" name="headless" {% if not cfg.browser.headless %}checked{% endif %} />
-                <span class="switch-slider"></span>
-              </label>
-            </div>
-            <div class="muted">开启=弹出真实浏览器窗口，可手动登录；关闭=无头后台运行</div>
-
-            <label>CDP 远程调试地址（可选）</label>
-            <input type="text" name="ws_url" value="{{ cfg.browser.ws_url or '' }}" placeholder="如 http://127.0.0.1:9222，留空则自动启动" />
-            <div class="muted">填入后连接已有 Chrome 调试端口，留空则自动拉起 Chrome</div>
-
-            <label>Chrome 可执行文件路径（可选）</label>
-            <input type="text" name="executable_path" value="{{ cfg.browser.executable_path or '' }}" placeholder="如 C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe" />
-            <div class="muted">留空=自动检测；填写后优先使用此路径</div>
-
-            <div class="switch-row">
-              <span>每条帖子都重新搜索（老模式）</span>
-              <label class="switch" for="search_each_post">
-                <input id="search_each_post" class="switch-input" type="checkbox" name="search_each_post" {% if cfg.browser.search_each_post %}checked{% endif %} />
-                <span class="switch-slider"></span>
-              </label>
-            </div>
-            <div class="muted">关闭=同词搜索一次后连续处理帖子</div>
-
-            <div class="switch-row">
-              <span>每轮每个方向只搜1个关键词</span>
-              <label class="switch" for="single_keyword_search">
-                <input id="single_keyword_search" class="switch-input" type="checkbox" name="single_keyword_search" {% if cfg.runtime.single_keyword_search %}checked{% endif %} />
-                <span class="switch-slider"></span>
-              </label>
-            </div>
-            <div class="muted">开启=每轮只取 AI 扩展的第1个新词</div>
-
-            <div class="switch-row">
-              <span>关闭关键词联想（按输入词直搜）</span>
-              <label class="switch" for="disable_keyword_expansion">
-                <input id="disable_keyword_expansion" class="switch-input" type="checkbox" name="disable_keyword_expansion" {% if cfg.runtime.disable_keyword_expansion %}checked{% endif %} />
-                <span class="switch-slider"></span>
-              </label>
-            </div>
-            <div class="muted">开启=输入什么关键词就搜索什么关键词，不走 AI 扩词</div>
-
-            <div class="switch-row">
-              <span>严格评论判定</span>
-              <label class="switch" for="strict_comment_gate">
-                <input id="strict_comment_gate" class="switch-input" type="checkbox" name="strict_comment_gate" {% if cfg.ai.strict_comment_gate %}checked{% endif %} />
-                <span class="switch-slider"></span>
-              </label>
-            </div>
-            <div class="muted">关闭=AI建议跳过也继续尝试评论</div>
-
-            <div class="switch-row">
-              <span>尽量每条都评论</span>
-              <label class="switch" for="comment_every_post">
-                <input id="comment_every_post" class="switch-input" type="checkbox" name="comment_every_post" {% if cfg.runtime.comment_every_post %}checked{% endif %} />
-                <span class="switch-slider"></span>
-              </label>
-            </div>
-            <div class="muted">开启=候选被过滤时仍尝试兜底评论</div>
-
-            <label>关键词扩展数量</label>
-            <input type="number" min="1" max="20" name="keyword_max_count" value="{{ cfg.ai.keyword_max_count }}" />
-
-            <label>每轮评论上限</label>
-            <input type="number" min="1" max="200" name="max_comments_per_round" value="{{ cfg.runtime.max_comments_per_round }}" />
-
-            <label>每词抓取帖子数</label>
-            <input type="number" min="1" max="200" name="search_limit_per_keyword" value="{{ cfg.runtime.search_limit_per_keyword }}" />
-
-            <label>方向词（逗号分隔）</label>
-            <input type="text" name="direction_keywords" value="{{ direction_keywords }}" />
-
-            <label>评论要求（每行一条）</label>
-            <textarea name="requirements">{{ requirements_text }}</textarea>
-
-            <div class="buttons">
-              <button type="submit">保存配置</button>
-            </div>
-          </form>
-
-
-        </div>
-      </div>
-
       <div>
         <div class="tables">
           <div class="card table-card">
@@ -1976,6 +2112,257 @@ HTML = """
       </div>
     </div>
   </div>
+
+      <div class="settings-modal hidden" id="settingsPanel" role="dialog" aria-modal="true" aria-labelledby="settingsTitle">
+        <div class="settings-dialog">
+          <div class="settings-header">
+            <div class="settings-heading">
+              <span class="section-title-main">
+                <span class="icon-shell small accent-blue"><svg class="glyph"><use href="#i-settings"></use></svg></span>
+                <span>
+                  <span id="settingsTitle">任务设置</span>
+                  <small>按评论、偏好、模型和浏览器四个模块调整运行参数。</small>
+                </span>
+              </span>
+              <div class="settings-subtitle">所有改动保存到当前配置文件，用于快手养号、自动评论和浏览器运行控制。</div>
+            </div>
+            <button type="button" class="settings-close" id="settingsClose">关闭</button>
+          </div>
+
+          <form id="settingsForm" method="post" action="{{ url_for('save') }}" class="settings-form">
+            <input type="hidden" name="config_path" value="{{ config_path }}" />
+
+            <div class="settings-form-shell">
+              <div class="settings-tabs" role="tablist" aria-label="设置分类">
+                <button type="button" class="settings-tab is-active" id="tabComment" data-tab-target="comment" role="tab" aria-selected="true" aria-controls="panelComment">
+                  <span class="icon-shell small accent-cyan"><svg class="glyph"><use href="#i-chat"></use></svg></span>
+                  <span class="settings-tab-copy">
+                    <span class="settings-tab-title">评论配置</span>
+                    <span class="settings-tab-note">评论要求、评论上限和评论策略</span>
+                  </span>
+                </button>
+                <button type="button" class="settings-tab" id="tabPreference" data-tab-target="preference" role="tab" aria-selected="false" aria-controls="panelPreference">
+                  <span class="icon-shell small accent-lime"><svg class="glyph"><use href="#i-keyword"></use></svg></span>
+                  <span class="settings-tab-copy">
+                    <span class="settings-tab-title">偏好配置</span>
+                    <span class="settings-tab-note">方向词、扩词方式和抓取范围</span>
+                  </span>
+                </button>
+                <button type="button" class="settings-tab" id="tabModel" data-tab-target="model" role="tab" aria-selected="false" aria-controls="panelModel">
+                  <span class="icon-shell small accent-blue"><svg class="glyph"><use href="#i-orbit"></use></svg></span>
+                  <span class="settings-tab-copy">
+                    <span class="settings-tab-title">模型配置</span>
+                    <span class="settings-tab-note">Base URL、模型 ID、API Key 和连通测试</span>
+                  </span>
+                </button>
+                <button type="button" class="settings-tab" id="tabBrowser" data-tab-target="browser" role="tab" aria-selected="false" aria-controls="panelBrowser">
+                  <span class="icon-shell small accent-amber"><svg class="glyph"><use href="#i-browser"></use></svg></span>
+                  <span class="settings-tab-copy">
+                    <span class="settings-tab-title">浏览器配置</span>
+                    <span class="settings-tab-note">浏览器显示、连接方式和执行路径</span>
+                  </span>
+                </button>
+              </div>
+
+              <div class="settings-panels">
+                <section class="settings-panel is-active" id="panelComment" data-tab-panel="comment" role="tabpanel" aria-labelledby="tabComment">
+                  <div class="settings-panel-head">
+                    <h4>评论配置</h4>
+                    <p>控制评论判定方式、每轮评论数量和评论输出要求。</p>
+                  </div>
+                  <div class="settings-grid">
+                    <div class="setting-card full">
+                      <span class="setting-chip">评论判定</span>
+                      <div class="setting-toggle-head">
+                        <div class="setting-toggle-copy">
+                          <div class="setting-title">严格评论判定</div>
+                          <div class="setting-hint">开启后仅在 AI 判定可评论时执行；关闭后即使建议跳过，也继续尝试评论。</div>
+                        </div>
+                        <label class="switch" for="strict_comment_gate">
+                          <input id="strict_comment_gate" class="switch-input" type="checkbox" name="strict_comment_gate" {% if cfg.ai.strict_comment_gate %}checked{% endif %} />
+                          <span class="switch-slider"></span>
+                        </label>
+                      </div>
+                    </div>
+
+                    <div class="setting-card full">
+                      <span class="setting-chip">评论覆盖</span>
+                      <div class="setting-toggle-head">
+                        <div class="setting-toggle-copy">
+                          <div class="setting-title">尽量每条都评论</div>
+                          <div class="setting-hint">开启后当候选评论被过滤时仍继续尝试兜底评论，适合提高交互频次。</div>
+                        </div>
+                        <label class="switch" for="comment_every_post">
+                          <input id="comment_every_post" class="switch-input" type="checkbox" name="comment_every_post" {% if cfg.runtime.comment_every_post %}checked{% endif %} />
+                          <span class="switch-slider"></span>
+                        </label>
+                      </div>
+                    </div>
+
+                    <div class="setting-card">
+                      <label for="max_comments_per_round">每轮评论上限</label>
+                      <div class="setting-hint">控制单轮任务最多写入多少条评论。</div>
+                      <input id="max_comments_per_round" type="number" min="1" max="200" name="max_comments_per_round" value="{{ cfg.runtime.max_comments_per_round }}" />
+                    </div>
+
+                    <div class="setting-card full">
+                      <label for="requirements">评论要求（每行一条）</label>
+                      <div class="setting-hint">写入评论生成要求，例如语气、结构或互动方式。</div>
+                      <textarea id="requirements" name="requirements">{{ requirements_text }}</textarea>
+                    </div>
+                  </div>
+                </section>
+
+                <section class="settings-panel" id="panelPreference" data-tab-panel="preference" role="tabpanel" aria-labelledby="tabPreference" hidden>
+                  <div class="settings-panel-head">
+                    <h4>偏好配置</h4>
+                    <p>控制方向词、关键词扩展方式以及每轮搜索偏好。</p>
+                  </div>
+                  <div class="settings-grid">
+                    <div class="setting-card full">
+                      <label for="direction_keywords">方向词（逗号分隔）</label>
+                      <div class="setting-hint">例如输入多个赛道或人群词，用于扩展快手搜索方向。</div>
+                      <input id="direction_keywords" type="text" name="direction_keywords" value="{{ direction_keywords }}" />
+                    </div>
+
+                    <div class="setting-card">
+                      <label for="keyword_max_count">关键词扩展数量</label>
+                      <div class="setting-hint">控制 AI 每轮最多扩展多少个新关键词。</div>
+                      <input id="keyword_max_count" type="number" min="1" max="20" name="keyword_max_count" value="{{ cfg.ai.keyword_max_count }}" />
+                    </div>
+
+                    <div class="setting-card">
+                      <label for="search_limit_per_keyword">每个关键词抓取帖子数</label>
+                      <div class="setting-hint">控制每个关键词最多分析多少条帖子。</div>
+                      <input id="search_limit_per_keyword" type="number" min="1" max="200" name="search_limit_per_keyword" value="{{ cfg.runtime.search_limit_per_keyword }}" />
+                    </div>
+
+                    <div class="setting-card full">
+                      <span class="setting-chip">关键词来源</span>
+                      <div class="setting-toggle-head">
+                        <div class="setting-toggle-copy">
+                          <div class="setting-title">每轮每个方向只搜索 1 个关键词</div>
+                          <div class="setting-hint">开启后每轮只取 AI 扩展结果中的第一个关键词，适合更稳的养号节奏。</div>
+                        </div>
+                        <label class="switch" for="single_keyword_search">
+                          <input id="single_keyword_search" class="switch-input" type="checkbox" name="single_keyword_search" {% if cfg.runtime.single_keyword_search %}checked{% endif %} />
+                          <span class="switch-slider"></span>
+                        </label>
+                      </div>
+                    </div>
+
+                    <div class="setting-card full">
+                      <span class="setting-chip">扩词开关</span>
+                      <div class="setting-toggle-head">
+                        <div class="setting-toggle-copy">
+                          <div class="setting-title">关闭关键词联想</div>
+                          <div class="setting-hint">开启后只按输入关键词直搜，不再使用 AI 扩词。</div>
+                        </div>
+                        <label class="switch" for="disable_keyword_expansion">
+                          <input id="disable_keyword_expansion" class="switch-input" type="checkbox" name="disable_keyword_expansion" {% if cfg.runtime.disable_keyword_expansion %}checked{% endif %} />
+                          <span class="switch-slider"></span>
+                        </label>
+                      </div>
+                    </div>
+                  </div>
+                </section>
+
+                <section class="settings-panel" id="panelModel" data-tab-panel="model" role="tabpanel" aria-labelledby="tabModel" hidden>
+                  <div class="settings-panel-head">
+                    <h4>模型配置</h4>
+                    <p>用于配置评论生成和关键词扩展所使用的模型连接。</p>
+                  </div>
+                  <div class="settings-grid">
+                    <div class="setting-card full">
+                      <label for="openai_base_url">模型 Base URL</label>
+                      <div class="setting-hint">填写接口地址，例如代理地址或兼容 OpenAI 的服务地址。</div>
+                      <input id="openai_base_url" type="text" name="openai_base_url" value="{{ cfg.openai.base_url if cfg.openai else '' }}" placeholder="https://gmn.chuangzuoli.com" />
+                    </div>
+
+                    <div class="setting-card">
+                      <label for="openai_model_id">模型 ID</label>
+                      <div class="setting-hint">填写实际调用的模型标识，例如 `gpt-5.3-codex`。</div>
+                      <input id="openai_model_id" type="text" name="openai_model_id" value="{{ cfg.openai.model_id if cfg.openai else '' }}" placeholder="gpt-5.3-codex" />
+                    </div>
+
+                    <div class="setting-card">
+                      <label for="openai_api_key">API Key</label>
+                      <div class="setting-hint">保存到当前配置文件，用于发起模型请求。</div>
+                      <input id="openai_api_key" type="text" name="openai_api_key" value="{{ cfg.openai.api_key if cfg.openai else '' }}" placeholder="sk-..." />
+                    </div>
+
+                    <div class="setting-card full">
+                      <span class="setting-chip">连通检查</span>
+                      <div class="setting-hint">保存前可先测试当前模型配置是否能正常连接。</div>
+                      <div class="buttons">
+                        <button type="button" class="btn secondary" id="testConnectionBtn">测试模型连接</button>
+                      </div>
+                      <pre id="testConnectionLog" class="test-log">点击“测试模型连接”检查 Base URL、模型 ID 和 API Key 是否可用。</pre>
+                    </div>
+                  </div>
+                </section>
+
+                <section class="settings-panel" id="panelBrowser" data-tab-panel="browser" role="tabpanel" aria-labelledby="tabBrowser" hidden>
+                  <div class="settings-panel-head">
+                    <h4>浏览器配置</h4>
+                    <p>用于控制 Playwright 启动方式、已有 Chrome 连接和搜索行为。</p>
+                  </div>
+                  <div class="settings-grid">
+                    <div class="setting-card full">
+                      <span class="setting-chip">运行方式</span>
+                      <div class="setting-toggle-head">
+                        <div class="setting-toggle-copy">
+                          <div class="setting-title">显示浏览器窗口</div>
+                          <div class="setting-hint">开启后弹出真实浏览器窗口，便于扫码登录和观察运行过程；关闭后后台无头运行。</div>
+                        </div>
+                        <label class="switch" for="headless">
+                          <input id="headless" class="switch-input" type="checkbox" name="headless" {% if not cfg.browser.headless %}checked{% endif %} />
+                          <span class="switch-slider"></span>
+                        </label>
+                      </div>
+                    </div>
+
+                    <div class="setting-card full">
+                      <span class="setting-chip">搜索模式</span>
+                      <div class="setting-toggle-head">
+                        <div class="setting-toggle-copy">
+                          <div class="setting-title">每条帖子重新搜索</div>
+                          <div class="setting-hint">开启后每处理一条帖子都回到搜索流程；关闭后同一关键词只搜索一次并连续处理帖子。</div>
+                        </div>
+                        <label class="switch" for="search_each_post">
+                          <input id="search_each_post" class="switch-input" type="checkbox" name="search_each_post" {% if cfg.browser.search_each_post %}checked{% endif %} />
+                          <span class="switch-slider"></span>
+                        </label>
+                      </div>
+                    </div>
+
+                    <div class="setting-card full">
+                      <label for="ws_url">CDP 远程调试地址（可选）</label>
+                      <div class="setting-hint">填写后优先连接已启动的 Chrome 调试端口；留空则自动拉起浏览器。</div>
+                      <input id="ws_url" type="text" name="ws_url" value="{{ cfg.browser.ws_url or '' }}" placeholder="如 http://127.0.0.1:9222，留空则自动启动" />
+                    </div>
+
+                    <div class="setting-card full">
+                      <label for="executable_path">Chrome 可执行文件路径（可选）</label>
+                      <div class="setting-hint">留空时自动检测；填写后优先使用这个 Chrome 路径。</div>
+                      <input id="executable_path" type="text" name="executable_path" value="{{ cfg.browser.executable_path or '' }}" placeholder="如 C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe" />
+                    </div>
+                  </div>
+                </section>
+              </div>
+            </div>
+
+            <div class="settings-footer">
+              <div class="settings-footer-copy">修改完成后点击“保存配置”，任务将按新的参数执行。</div>
+              <div class="settings-footer-actions">
+                <button type="button" class="btn secondary" id="settingsCancel">关闭</button>
+                <button type="submit">保存配置</button>
+              </div>
+            </div>
+          </form>
+        </div>
+      </div>
+
 
   <script>
     const configPath = {{ config_path | tojson }};
@@ -2041,9 +2428,13 @@ HTML = """
     const settingsToggle = document.getElementById('settingsToggle');
     const settingsPanel = document.getElementById('settingsPanel');
     const settingsClose = document.getElementById('settingsClose');
+    const settingsCancel = document.getElementById('settingsCancel');
     const settingsForm = document.getElementById('settingsForm');
     const testConnectionBtn = document.getElementById('testConnectionBtn');
     const testConnectionLog = document.getElementById('testConnectionLog');
+    const settingsTabButtons = Array.from(document.querySelectorAll('[data-tab-target]'));
+    const settingsTabPanels = Array.from(document.querySelectorAll('[data-tab-panel]'));
+    let activeSettingsTab = 'comment';
     let lastActivitySignature = '';
 
     function esc(value) {
@@ -2246,17 +2637,34 @@ HTML = """
       heroPhase.textContent = summary.phase || '待机';
     }
 
+    function setSettingsTab(name) {
+      activeSettingsTab = name;
+      settingsTabButtons.forEach((button) => {
+        const active = button.dataset.tabTarget === name;
+        button.classList.toggle('is-active', active);
+        button.setAttribute('aria-selected', active ? 'true' : 'false');
+        button.tabIndex = active ? 0 : -1;
+      });
+
+      settingsTabPanels.forEach((panel) => {
+        const active = panel.dataset.tabPanel === name;
+        panel.classList.toggle('is-active', active);
+        if (active) panel.removeAttribute('hidden');
+        else panel.setAttribute('hidden', 'hidden');
+      });
+    }
+
     function setSettingsVisible(visible) {
       if (!settingsPanel) return;
-      if (visible) settingsPanel.classList.remove('hidden');
-      else settingsPanel.classList.add('hidden');
+      settingsPanel.classList.toggle('hidden', !visible);
+      document.body.classList.toggle('modal-open', !!visible);
     }
 
     async function testConnection() {
       if (!settingsForm || !testConnectionLog || !testConnectionBtn) return;
 
       testConnectionBtn.disabled = true;
-      testConnectionLog.textContent = '正在测试连接，请稍候...';
+      testConnectionLog.textContent = '正在测试模型连接，请稍候...';
 
       try {
         const resp = await fetch('/api/test_connection', {
@@ -2272,20 +2680,38 @@ HTML = """
         }
 
         const ok = !!payload.ok;
-        const status = ok ? '✅ 连接成功' : '❌ 连接失败';
+        const status = ok ? '连接成功' : '连接失败';
         const detail = payload.detail || '';
         const summary = payload.message || '';
         testConnectionLog.textContent = `${status}\n${summary}${detail ? `\n\n${detail}` : ''}`;
       } catch (err) {
         const msg = String((err && err.message) || err);
-        testConnectionLog.textContent = `❌ 请求异常\n${msg}`;
+        testConnectionLog.textContent = `请求异常\n${msg}`;
       } finally {
         testConnectionBtn.disabled = false;
       }
     }
 
+    if (settingsTabButtons.length) {
+      settingsTabButtons.forEach((button) => {
+        button.addEventListener('click', () => setSettingsTab(button.dataset.tabTarget || 'comment'));
+      });
+      setSettingsTab(activeSettingsTab);
+    }
+
     if (settingsToggle) settingsToggle.addEventListener('click', () => setSettingsVisible(true));
     if (settingsClose) settingsClose.addEventListener('click', () => setSettingsVisible(false));
+    if (settingsCancel) settingsCancel.addEventListener('click', () => setSettingsVisible(false));
+    if (settingsPanel) {
+      settingsPanel.addEventListener('click', (event) => {
+        if (event.target === settingsPanel) setSettingsVisible(false);
+      });
+    }
+    document.addEventListener('keydown', (event) => {
+      if (event.key === 'Escape' && settingsPanel && !settingsPanel.classList.contains('hidden')) {
+        setSettingsVisible(false);
+      }
+    });
     if (testConnectionBtn) testConnectionBtn.addEventListener('click', testConnection);
 
     function renderComments(rows) {
