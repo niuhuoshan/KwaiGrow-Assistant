@@ -38,6 +38,7 @@ class AIConfig(BaseModel):
     enabled: bool = True
     keyword_max_count: int = 10
     comment_candidate_count: int = 3
+    enable_commentability_check: bool = False
     strict_comment_gate: bool = False
 
 
@@ -77,6 +78,8 @@ class RuntimeConfig(BaseModel):
 
 class CommentRuleConfig(BaseModel):
     requirements: List[str]
+    style_prompt: str = ""
+    content_prompt: str = ""
     banned_words: List[str] = Field(default_factory=list)
     min_length: int = 5
     max_length: int = 80

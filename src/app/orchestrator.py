@@ -62,10 +62,11 @@ class AutoCommenterOrchestrator:
             raise
         self._logger.info("[AUTOMATION] browser client ready | elapsed=%.2fs", perf_counter() - browser_start_at)
         self._logger.info(
-            "[AUTOMATION] loaded limits: max_comments_per_round=%s daily_comment_limit=%s single_keyword_search=%s",
+            "[AUTOMATION] loaded limits: max_comments_per_round=%s daily_comment_limit=%s single_keyword_search=%s commentability_check=%s",
             self._cfg.runtime.max_comments_per_round,
             self._cfg.runtime.daily_comment_limit,
             self._cfg.runtime.single_keyword_search,
+            self._cfg.ai.enable_commentability_check,
         )
 
         round_index = 0
@@ -188,27 +189,34 @@ class AutoCommenterOrchestrator:
             context.hot_comments_summary[:120] if context.hot_comments_summary else "",
         )
 
-        self._logger.info("[AI] commentability check post_id=%s", post.post_id)
-        commentable, reason = self._comment_engine.is_commentable(
-            post_summary=context.content_summary,
-            hot_comments_summary=context.hot_comments_summary,
-            requirements=self._cfg.comment_rules.requirements,
-        )
-        if not commentable:
-            if self._cfg.ai.strict_comment_gate:
-                self._logger.info("[AI] post not commentable post_id=%s reason=%s", post.post_id, reason)
-                return False
-            self._logger.info(
-                "[AI] gate建议跳过，但当前为非严格模式，继续生成评论 post_id=%s reason=%s",
-                post.post_id,
-                reason,
+        if self._cfg.ai.enable_commentability_check:
+            self._logger.info("[AI] commentability check post_id=%s", post.post_id)
+            commentable, reason = self._comment_engine.is_commentable(
+                post_summary=context.content_summary,
+                hot_comments_summary=context.hot_comments_summary,
+                requirements=self._cfg.comment_rules.requirements,
+                style_prompt=self._cfg.comment_rules.style_prompt,
+                content_prompt=self._cfg.comment_rules.content_prompt,
             )
+            if not commentable:
+                if self._cfg.ai.strict_comment_gate:
+                    self._logger.info("[AI] post not commentable post_id=%s reason=%s", post.post_id, reason)
+                    return False
+                self._logger.info(
+                    "[AI] gate建议跳过，但当前为非严格模式，继续生成评论 post_id=%s reason=%s",
+                    post.post_id,
+                    reason,
+                )
+        else:
+            self._logger.info("[AI] commentability check disabled, comment all posts post_id=%s", post.post_id)
 
         self._logger.info("[AI] generate comment candidates post_id=%s", post.post_id)
         candidates = self._comment_engine.generate_candidates(
             post_summary=context.content_summary,
             hot_comments_summary=context.hot_comments_summary,
             requirements=self._cfg.comment_rules.requirements,
+            style_prompt=self._cfg.comment_rules.style_prompt,
+            content_prompt=self._cfg.comment_rules.content_prompt,
         )
         self._logger.debug("[AI] generated candidates post_id=%s candidates=%s", post.post_id, candidates)
 

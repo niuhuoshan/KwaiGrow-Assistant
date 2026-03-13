@@ -2152,15 +2152,29 @@ HTML = """
                 <section class="settings-panel is-active" id="panelComment" data-tab-panel="comment" role="tabpanel" aria-labelledby="tabComment">
                   <div class="settings-panel-head">
                     <h4>评论配置</h4>
-                    <p>控制评论判定方式、每轮评论数量和评论输出要求。</p>
+                    <p>控制评论筛选方式、评论上限和评论生成要求。</p>
                   </div>
                   <div class="settings-grid">
                     <div class="setting-card full">
-                      <span class="setting-chip">评论判定</span>
+                      <span class="setting-chip">评论筛选</span>
                       <div class="setting-toggle-head">
                         <div class="setting-toggle-copy">
-                          <div class="setting-title">严格评论判定</div>
-                          <div class="setting-hint">开启后仅在 AI 判定可评论时执行；关闭后即使建议跳过，也继续尝试评论。</div>
+                          <div class="setting-title">启用评论前判定</div>
+                          <div class="setting-hint">开启后先判断帖子是否适合评论；关闭后跳过筛选，直接对抓取到的帖子生成评论。默认关闭。</div>
+                        </div>
+                        <label class="switch" for="enable_commentability_check">
+                          <input id="enable_commentability_check" class="switch-input" type="checkbox" name="enable_commentability_check" {% if cfg.ai.enable_commentability_check %}checked{% endif %} />
+                          <span class="switch-slider"></span>
+                        </label>
+                      </div>
+                    </div>
+
+                    <div class="setting-card full">
+                      <span class="setting-chip">判定执行</span>
+                      <div class="setting-toggle-head">
+                        <div class="setting-toggle-copy">
+                          <div class="setting-title">严格执行判定结果</div>
+                          <div class="setting-hint">仅在启用评论前判定时生效。开启后 AI 判定不适合评论的帖子会直接跳过。</div>
                         </div>
                         <label class="switch" for="strict_comment_gate">
                           <input id="strict_comment_gate" class="switch-input" type="checkbox" name="strict_comment_gate" {% if cfg.ai.strict_comment_gate %}checked{% endif %} />
@@ -2189,10 +2203,28 @@ HTML = """
                       <input id="max_comments_per_round" type="number" min="1" max="200" name="max_comments_per_round" value="{{ cfg.runtime.max_comments_per_round }}" />
                     </div>
 
+                    <div class="setting-card">
+                      <label for="daily_comment_limit">每日评论上限</label>
+                      <div class="setting-hint">达到上限后，当天剩余轮次不会继续评论。</div>
+                      <input id="daily_comment_limit" type="number" min="1" max="5000" name="daily_comment_limit" value="{{ cfg.runtime.daily_comment_limit }}" />
+                    </div>
+
                     <div class="setting-card full">
-                      <label for="requirements">评论要求（每行一条）</label>
-                      <div class="setting-hint">写入评论生成要求，例如语气、结构或互动方式。</div>
+                      <label for="requirements">基础评论要求（每行一条）</label>
+                      <div class="setting-hint">写入通用约束，例如字数、结构和互动方式。</div>
                       <textarea id="requirements" name="requirements">{{ requirements_text }}</textarea>
+                    </div>
+
+                    <div class="setting-card full">
+                      <label for="style_prompt">评论风格</label>
+                      <div class="setting-hint">例如自然、真诚、轻松、像普通用户留言，不要写成模板话术。</div>
+                      <textarea id="style_prompt" name="style_prompt">{{ style_prompt_text }}</textarea>
+                    </div>
+
+                    <div class="setting-card full">
+                      <label for="content_prompt">评论内容侧重</label>
+                      <div class="setting-hint">例如优先认可观点、围绕求职交流、补一句提问，或聚焦某个内容点。</div>
+                      <textarea id="content_prompt" name="content_prompt">{{ content_prompt_text }}</textarea>
                     </div>
                   </div>
                 </section>
@@ -2204,8 +2236,8 @@ HTML = """
                   </div>
                   <div class="settings-grid">
                     <div class="setting-card full">
-                      <label for="direction_keywords">方向词（逗号分隔）</label>
-                      <div class="setting-hint">例如输入多个赛道或人群词，用于扩展快手搜索方向。</div>
+                      <label for="direction_keywords">方向词（使用 & 分隔）</label>
+                      <div class="setting-hint">例如：找搭子 & 找工作 & 广东 & 求职。保存时也兼容中英文逗号。</div>
                       <input id="direction_keywords" type="text" name="direction_keywords" value="{{ direction_keywords }}" />
                     </div>
 
@@ -3157,10 +3189,12 @@ def _apply_defaults(cfg: Dict[str, Any]) -> Dict[str, Any]:
     browser.setdefault("headless", False)
     browser.setdefault("ws_url", None)
     browser.setdefault("executable_path", None)
+    ai.setdefault("enable_commentability_check", False)
     ai.setdefault("strict_comment_gate", False)
     ai.setdefault("keyword_max_count", 10)
 
     runtime.setdefault("max_comments_per_round", 5)
+    runtime.setdefault("daily_comment_limit", 30)
     runtime.setdefault("search_limit_per_keyword", 5)
     runtime.setdefault("single_keyword_search", True)
     runtime.setdefault("disable_keyword_expansion", False)
@@ -3168,6 +3202,8 @@ def _apply_defaults(cfg: Dict[str, Any]) -> Dict[str, Any]:
 
     topics.setdefault("direction_keywords", ["美女"])
     comment_rules.setdefault("requirements", ["先认可观点，再补一句虚心求教，语气自然"])
+    comment_rules.setdefault("style_prompt", "")
+    comment_rules.setdefault("content_prompt", "")
 
     logging_cfg.setdefault("file_path", "./logs/app.log")
     dedup_cfg.setdefault("sqlite_path", "./data/dedup.sqlite3")
@@ -3398,8 +3434,10 @@ def index():
         HTML,
         cfg=cfg,
         config_path=str(config_path),
-        direction_keywords=", ".join(cfg["topics"].get("direction_keywords", [])),
+        direction_keywords=" & ".join(cfg["topics"].get("direction_keywords", [])),
         requirements_text="\n".join(cfg["comment_rules"].get("requirements", [])),
+        style_prompt_text=cfg["comment_rules"].get("style_prompt", ""),
+        content_prompt_text=cfg["comment_rules"].get("content_prompt", ""),
         run_status="运行中" if payload.get("running") else "空闲",
         message=request.args.get("message", ""),
         initial_payload=payload,
@@ -3501,21 +3539,30 @@ def save():
     browser_cfg["executable_path"] = executable_path if executable_path else None
 
     ai = cfg.setdefault("ai", {})
+    ai["enable_commentability_check"] = bool(request.form.get("enable_commentability_check"))
     ai["strict_comment_gate"] = bool(request.form.get("strict_comment_gate"))
     ai["keyword_max_count"] = int(request.form.get("keyword_max_count") or 10)
 
     runtime = cfg.setdefault("runtime", {})
     runtime["max_comments_per_round"] = int(request.form.get("max_comments_per_round") or 5)
+    runtime["daily_comment_limit"] = int(request.form.get("daily_comment_limit") or 30)
     runtime["search_limit_per_keyword"] = int(request.form.get("search_limit_per_keyword") or 5)
     runtime["single_keyword_search"] = bool(request.form.get("single_keyword_search"))
     runtime["disable_keyword_expansion"] = bool(request.form.get("disable_keyword_expansion"))
     runtime["comment_every_post"] = bool(request.form.get("comment_every_post"))
 
-    direction_keywords = [v.strip() for v in (request.form.get("direction_keywords") or "").split(",") if v.strip()]
+    direction_keywords = [
+        v.strip()
+        for v in re.split(r"\s*(?:&|，|,)\s*", request.form.get("direction_keywords") or "")
+        if v.strip()
+    ]
     cfg.setdefault("topics", {})["direction_keywords"] = direction_keywords or ["美女"]
 
     requirements = [v.strip() for v in (request.form.get("requirements") or "").splitlines() if v.strip()]
-    cfg.setdefault("comment_rules", {})["requirements"] = requirements or ["先认可对方观点，再补一句虚心求教，语气自然"]
+    comment_rules = cfg.setdefault("comment_rules", {})
+    comment_rules["requirements"] = requirements or ["先认可对方观点，再补一句虚心求教，语气自然"]
+    comment_rules["style_prompt"] = (request.form.get("style_prompt") or "").strip()
+    comment_rules["content_prompt"] = (request.form.get("content_prompt") or "").strip()
 
     _save_yaml(config_path, cfg)
     return redirect(url_for("index", config_path=str(config_path), message="配置已保存"))
