@@ -16,19 +16,26 @@ venv/
 logs/
 data/
 *.sqlite3
+*.log
 
 # Local IDE/system
 .DS_Store
 .vscode/
 .idea/
 
-# Local runtime configs (keep only examples)
-config.realrun*.yaml
-config.verify.yaml
-config.submitcheck.yaml
-config.regress.submit.yaml
-config.e2e.yaml
+# Local agent / assistant files
+CLAUDE.md
+**/CLAUDE.md
+
+# Local runtime configs (keep only sanitized examples)
 config.yaml
+config.*.yaml
+config*.local.yaml
+config*.local.yml
+*.local.yaml
+*.local.yml
+!config.example.yaml
+!config/kuaishou.yaml.example
 
 # Secrets
 .env

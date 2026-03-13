@@ -8,7 +8,7 @@ account_id: default
 openai:
   # Example: https://api.openai.com/v1 or your OpenAI-compatible gateway
   base_url: https://api.openai.com/v1
-  api_key: sk-your-api-key-here
+  api_key: ${OPENAI_API_KEY}
   model_id: gpt-4o-mini
   temperature: 0.6
   max_tokens: 400
@@ -16,7 +16,8 @@ openai:
 
 browser:
   # If you connect to an existing Chrome profile via CDP:
-  ws_url: ws://127.0.0.1:18792/cdp
+  # set ws_url only when you need to connect an existing browser
+  ws_url: null
   headless: false
   executable_path: null
   user_data_dir: ./data/browser

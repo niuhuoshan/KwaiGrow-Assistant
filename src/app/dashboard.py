@@ -1871,22 +1871,6 @@ HTML = """
       </div>
     </div>
 
-    <div id="alertBanner" class="alert-banner {{ initial_alert_class }}{% if initial_alert_class == 'alert-info' %} hidden{% endif %}">
-      <div class="alert-main">
-        <span class="icon-shell small accent-amber">
-          <svg class="glyph"><use href="#i-alert"></use></svg>
-        </span>
-        <div class="alert-copy">
-          <div class="alert-topline">
-            <div id="alertTitle" class="alert-title">{{ initial_alert_title }}</div>
-            <span class="alert-badge" id="alertLevel">{{ '错误' if initial_alert_class == 'alert-error' else '警告' }}</span>
-          </div>
-          <div id="alertMessage" class="muted">{{ initial_alert_message }}</div>
-          <div id="alertHint" class="muted">{{ initial_alert_hint }}</div>
-        </div>
-      </div>
-    </div>
-
     <div class="stats">
       <div class="card stat stat-cyan">
         <div class="metric-head">
@@ -2377,12 +2361,6 @@ HTML = """
     const heroWarnCount = document.getElementById('heroWarnCount');
     const heroInfoCount = document.getElementById('heroInfoCount');
 
-    const alertBanner = document.getElementById('alertBanner');
-    const alertTitle = document.getElementById('alertTitle');
-    const alertMessage = document.getElementById('alertMessage');
-    const alertHint = document.getElementById('alertHint');
-    const alertLevel = document.getElementById('alertLevel');
-
     const statToday = document.getElementById('statToday');
     const statTotal = document.getElementById('statTotal');
     const statKeyword = document.getElementById('statKeyword');
@@ -2742,22 +2720,15 @@ HTML = """
       const safeAlert = alert || {};
       const level = safeAlert.level || 'info';
       const title = safeAlert.title || '系统状态';
-      const message = safeAlert.message || '--';
+      const rawMessage = safeAlert.message || '';
+      const message = rawMessage && rawMessage !== title ? `${title}：${rawMessage}` : (rawMessage || title || '--');
       const hint = safeAlert.hint || '';
 
-      if (level === 'info' || level === 'ok' || !level) {
-        alertBanner.classList.add('hidden');
-        return;
-      }
-
-      alertBanner.classList.remove('hidden', 'alert-info', 'alert-warn', 'alert-error');
-      if (level === 'error') alertBanner.classList.add('alert-error');
-      else alertBanner.classList.add('alert-warn');
-
-      alertTitle.textContent = title;
-      alertMessage.textContent = message;
-      alertHint.textContent = hint;
-      alertLevel.textContent = level === 'error' ? '错误' : '警告';
+      signalRing.dataset.level = level === 'error' ? 'error' : (level === 'warn' ? 'warn' : 'info');
+      signalTone.textContent = level === 'error' ? '错误' : (level === 'warn' ? '警告' : '运行中');
+      signalMessage.textContent = message;
+      signalHint.textContent = hint;
+      statPhaseNote.textContent = clip(message, 80);
     }
 
     function renderStatus(payload) {
@@ -2784,8 +2755,6 @@ HTML = """
       tryRender('signal', () => renderSignalPanel(payload));
       tryRender('comments', () => renderComments(payload.comments || []));
       tryRender('keywords', () => renderKeywords(payload.keyword_history || []));
-      tryRender('alert', () => applyAlert(payload.alert || {}));
-
       lastUpdated.textContent = new Date().toLocaleTimeString('zh-CN', { hour12: false });
     }
 
@@ -3240,8 +3209,44 @@ def _detect_phase(log_text: str, running: bool) -> str:
     return "运行中" if running else "空闲"
 
 
-def _classify_alert(log_text: str, running: bool) -> Dict[str, str]:
+def _current_run_log_text(log_text: str, running: bool) -> str:
+    if not running:
+        return ""
+
     lines = [line for line in log_text.splitlines() if line.strip()]
+    if not lines:
+        return ""
+
+    start_patterns = [
+        r"\[AI\]\s+startup health check(?! passed| failed)",
+        r"\[AUTOMATION\]\s+start browser client\b",
+        r"\[AUTOMATION\]\s+round=1 begin\b",
+    ]
+
+    start_idx = -1
+    for idx, line in enumerate(lines):
+        if any(re.search(pattern, line, re.IGNORECASE) for pattern in start_patterns):
+            start_idx = idx
+
+    if start_idx >= 0:
+        backtrack_idx = start_idx
+        for _ in range(8):
+            if backtrack_idx <= 0:
+                break
+            prev_line = lines[backtrack_idx - 1]
+            if re.search(r"once mode enabled, stop after round=\d+", prev_line, re.IGNORECASE):
+                break
+            backtrack_idx -= 1
+            if re.search(start_patterns[0], prev_line, re.IGNORECASE):
+                break
+        return "\n".join(lines[backtrack_idx:])
+
+    return "\n".join(lines)
+
+
+def _classify_alert(log_text: str, running: bool) -> Dict[str, str]:
+    session_log = _current_run_log_text(log_text, running)
+    lines = [line for line in session_log.splitlines() if line.strip()]
 
     def last_match_with_index(regex: str) -> Tuple[int, str]:
         for idx in range(len(lines) - 1, -1, -1):
@@ -3249,6 +3254,15 @@ def _classify_alert(log_text: str, running: bool) -> Dict[str, str]:
             if re.search(regex, line, re.IGNORECASE):
                 return idx, line
         return -1, ""
+
+    if not lines:
+        return {
+            "level": "info",
+            "title": "当前空闲",
+            "message": "系统待机中，可点击“开始任务（单轮）”或“开始任务（持续）”。",
+            "hint": "任务状态只显示当前运行中的告警信息。",
+            "key": "idle",
+        }
 
     ai_bad_idx, ai_bad_line = last_match_with_index(r"AI 未启用|配置缺失|startup health check failed|OpenAI disabled")
     ai_ok_idx, _ = last_match_with_index(r"startup health check passed")
@@ -3335,7 +3349,8 @@ def _classify_alert(log_text: str, running: bool) -> Dict[str, str]:
 
 
 def _runtime_summary(log_text: str, running: bool) -> Dict[str, str]:
-    lines = [line for line in log_text.splitlines() if line.strip()]
+    session_log = _current_run_log_text(log_text, running)
+    lines = [line for line in session_log.splitlines() if line.strip()]
 
     def pick_last(level: str) -> str:
         token = f"| {level.upper()} |"
@@ -3345,7 +3360,7 @@ def _runtime_summary(log_text: str, running: bool) -> Dict[str, str]:
         return ""
 
     return {
-        "phase": _detect_phase(log_text, running),
+        "phase": _detect_phase(session_log, running) if session_log.strip() else ("运行中" if running else "待机"),
         "last_error": pick_last("ERROR"),
         "last_warning": pick_last("WARNING"),
         "last_info": pick_last("INFO"),
@@ -3378,11 +3393,6 @@ def index():
     cfg, _, _ = _resolve_paths(config_path)
     payload = _live_payload(config_path)
     alert = payload.get("alert") or {}
-    initial_level = str(alert.get("level") or "info")
-    initial_alert_class = {
-        "error": "alert-error",
-        "warn": "alert-warn",
-    }.get(initial_level, "alert-info")
 
     return render_template_string(
         HTML,
@@ -3395,8 +3405,6 @@ def index():
         initial_payload=payload,
         initial_stats=payload.get("stats") or {"today_comments": 0, "total_comments": 0, "keyword_history_total": 0},
         initial_phase=(payload.get("summary") or {}).get("phase") or "待机",
-        initial_alert_class=initial_alert_class,
-        initial_alert_title=alert.get("title") or "系统状态",
         initial_alert_message=alert.get("message") or "等待轮询数据",
         initial_alert_hint=alert.get("hint") or "",
     )
