@@ -1867,7 +1867,7 @@ HTML = """
             <span>手动刷新</span>
           </a>
         </div>
-        <div class="muted">用于启动单轮任务、持续任务和停止当前任务。</div>
+        <div class="muted">用于启动单轮任务、持续任务和停止当前任务。程序会自动检查登录态并尝试关闭连播。</div>
       </div>
     </div>
 
@@ -2094,8 +2094,8 @@ HTML = """
           </div>
         </div>
       </div>
+      </div>
     </div>
-  </div>
 
       <div class="settings-modal hidden" id="settingsPanel" role="dialog" aria-modal="true" aria-labelledby="settingsTitle">
         <div class="settings-dialog">
@@ -2200,13 +2200,13 @@ HTML = """
                     <div class="setting-card">
                       <label for="max_comments_per_round">每轮评论上限</label>
                       <div class="setting-hint">控制单轮任务最多写入多少条评论。</div>
-                      <input id="max_comments_per_round" type="number" min="1" max="200" name="max_comments_per_round" value="{{ cfg.runtime.max_comments_per_round }}" />
+                      <input id="max_comments_per_round" type="number" min="1" max="2000000" name="max_comments_per_round" value="{{ cfg.runtime.max_comments_per_round }}" />
                     </div>
 
                     <div class="setting-card">
                       <label for="daily_comment_limit">每日评论上限</label>
                       <div class="setting-hint">达到上限后，当天剩余轮次不会继续评论。</div>
-                      <input id="daily_comment_limit" type="number" min="1" max="5000" name="daily_comment_limit" value="{{ cfg.runtime.daily_comment_limit }}" />
+                      <input id="daily_comment_limit" type="number" min="1" max="5000000" name="daily_comment_limit" value="{{ cfg.runtime.daily_comment_limit }}" />
                     </div>
 
                     <div class="setting-card full">
@@ -2250,7 +2250,7 @@ HTML = """
                     <div class="setting-card">
                       <label for="search_limit_per_keyword">每个关键词抓取帖子数</label>
                       <div class="setting-hint">控制每个关键词最多分析多少条帖子。</div>
-                      <input id="search_limit_per_keyword" type="number" min="1" max="200" name="search_limit_per_keyword" value="{{ cfg.runtime.search_limit_per_keyword }}" />
+                      <input id="search_limit_per_keyword" type="number" min="1" max="2000000" name="search_limit_per_keyword" value="{{ cfg.runtime.search_limit_per_keyword }}" />
                     </div>
 
                     <div class="setting-card full">

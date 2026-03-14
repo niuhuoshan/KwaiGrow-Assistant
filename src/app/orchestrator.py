@@ -175,7 +175,14 @@ class AutoCommenterOrchestrator:
                     "[AUTOMATION] resolved real post_id=%s from url=%s (was %s)",
                     real_id, real_url, post.post_id,
                 )
-                post = Post(post_id=real_id, title=post.title, url=real_url)
+                post = Post(
+                    post_id=real_id,
+                    title=post.title,
+                    url=real_url,
+                    search_keyword=post.search_keyword or keyword,
+                    locator_hint=post.locator_hint,
+                    rank=post.rank,
+                )
                 if self._should_skip_post(post):
                     self._logger.info("[AUTOMATION] skip dedup (real id) post_id=%s", post.post_id)
                     return False

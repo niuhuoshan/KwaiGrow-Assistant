@@ -20,7 +20,7 @@ def normalize_spaces(value: str) -> str:
 def is_valid_keyword(text: str) -> bool:
     if not text:
         return False
-    if len(text) < 2 or len(text) > 16:
+    if len(text) > 16:
         return False
     if any(mark in text for mark in _KEYWORD_PUNCT):
         return False

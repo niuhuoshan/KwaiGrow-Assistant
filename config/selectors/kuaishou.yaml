@@ -16,3 +16,4 @@ selectors:
   comment_panel: ".side-area, .tab-nav-wrapper"
   comment_input: "textarea, div[contenteditable='true'], [role='textbox'], input[placeholder*='说点什么'], input[placeholder*='评论']"
   comment_submit: "button:has-text('发布'), button:has-text('发送'), .send-btn:not(.disabled):not([disabled]), button.send-btn:not([disabled])"
+  autoplay_toggle: "button:has-text('自动连播'), button:has-text('连播'), [role='button']:has-text('自动连播'), [role='button']:has-text('连播')"

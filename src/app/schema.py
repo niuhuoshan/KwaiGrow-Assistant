@@ -10,6 +10,9 @@ class Post:
     post_id: str
     title: str
     url: str
+    search_keyword: str = ""
+    locator_hint: str = ""
+    rank: int = -1
 
 
 @dataclass(slots=True)
